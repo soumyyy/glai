@@ -1,11 +1,11 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-export default function HomeScreen() {
+export default function HistoryScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Home / Today</Text>
-      <Text style={styles.subtitle}>Daily summary goes here</Text>
+      <Text style={styles.title}>History</Text>
+      <Text style={styles.subtitle}>7-day chart + past days go here</Text>
     </View>
   );
 }

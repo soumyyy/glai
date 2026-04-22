@@ -1,11 +1,11 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-export default function HomeScreen() {
+export default function ProfileScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Home / Today</Text>
-      <Text style={styles.subtitle}>Daily summary goes here</Text>
+      <Text style={styles.title}>Profile</Text>
+      <Text style={styles.subtitle}>Settings and data export go here</Text>
     </View>
   );
 }
