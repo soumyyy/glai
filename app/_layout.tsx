@@ -1,11 +1,15 @@
 import 'react-native-url-polyfill/auto';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { useCameraPermissions } from 'expo-camera';
 import { initSchema } from '../lib/db/schema';
 
 export default function RootLayout() {
+  const [, requestPermission] = useCameraPermissions();
+
   useEffect(() => {
     initSchema();
+    requestPermission();
   }, []);
 
   return (
