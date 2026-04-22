@@ -1,0 +1,18 @@
+export const Colors = {
+  primary: '#2563EB',
+  background: '#F9FAFB',
+  surface: '#FFFFFF',
+  border: '#E5E7EB',
+  text: '#111827',
+  textSecondary: '#6B7280',
+  carbs: '#F59E0B',
+  protein: '#10B981',
+  fat: '#EF4444',
+  calories: '#8B5CF6',
+  warning: '#FCD34D',
+  error: '#DC2626',
+  success: '#16A34A',
+  tabBar: '#FFFFFF',
+  tabIcon: '#9CA3AF',
+  tabIconActive: '#2563EB',
+};
