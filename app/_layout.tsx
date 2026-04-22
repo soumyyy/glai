@@ -1,24 +1,22 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import 'react-native-url-polyfill/auto';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { useEffect } from 'react';
+import { initSchema } from '../lib/db/schema';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    initSchema();
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
+      <Stack.Screen name="portion" options={{ presentation: 'modal', title: 'Portion Size' }} />
+      <Stack.Screen name="review" options={{ presentation: 'modal', title: 'Review' }} />
+      <Stack.Screen name="save-confirmation" options={{ presentation: 'modal', title: 'Save Meal' }} />
+      <Stack.Screen name="day/[date]" options={{ title: 'Day Detail' }} />
+      <Stack.Screen name="meal/[id]" options={{ title: 'Meal Detail' }} />
+    </Stack>
   );
 }
