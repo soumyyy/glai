@@ -1,50 +1,150 @@
-# Welcome to your Expo app 👋
+# Glai
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Glai is an Expo React Native app for photo-based meal logging with a strong diabetes use case:
+capture a meal, run a two-step AI analysis, review the detected items, and save structured nutrition data locally with optional Supabase sync.
 
-## Get started
+## Current state
 
-1. Install dependencies
+The meal capture flow is implemented:
 
-   ```bash
-   npm install
-   ```
+- camera capture or gallery import
+- image compression to base64
+- two-step OpenAI analysis
+- review and correction
+- local SQLite save
+- background Supabase sync when configured
 
-2. Start the app
+The main read-only screens are still scaffold-level UI and will be refined next.
 
-   ```bash
-   npx expo start
-   ```
+## Environment
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Create `.env.local` in the project root.
 
 ```bash
-npm run reset-project
+EXPO_PUBLIC_OPENAI_API_KEY=
+EXPO_PUBLIC_OPENAI_MODEL=gpt-4o-2024-11-20
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_KEY=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+# or use EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY instead of the anon key name
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Notes:
 
-## Learn more
+- OpenAI is required for meal analysis.
+- Supabase is optional during development. If the Supabase env vars are blank, cloud sync is skipped and local saves still work.
+- The backend now supports `EXPO_PUBLIC_SUPABASE_KEY`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, or `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Local development
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Install dependencies and start the app:
 
-## Join the community
+```bash
+npm install
+npx expo start
+```
 
-Join our community of developers creating universal apps.
+Quality checks:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx tsc --noEmit
+npm run lint
+```
+
+## Backend architecture
+
+### OpenAI
+
+Meal analysis is intentionally split into two calls:
+
+1. identify visible dishes
+2. estimate weight and nutrition ranges for those identified dishes
+
+The OpenAI layer now uses:
+
+- a shared request helper
+- request timeouts
+- bounded retries for transient failures
+- structured JSON-schema output
+- runtime validation before the app accepts model output
+
+### Local database
+
+SQLite stores:
+
+- `users`
+- `meals`
+- `meal_items`
+- `daily_summaries`
+
+Important detail:
+
+- meals now store `logged_on_date` explicitly, so summaries are grouped by the user’s local day instead of UTC date boundaries
+
+### Supabase
+
+Supabase sync is best-effort and non-blocking:
+
+- if env vars are missing, sync is skipped
+- the local user row is synced first
+- meals, meal items, and daily summaries are upserted
+- a meal is marked synced locally only after the related cloud writes succeed
+
+Current hosted project:
+
+- project ref: `ryzxpkpfsmmxutkfwknc`
+- initial migration: applied
+- repo status: linked via Supabase CLI
+
+## Supabase CLI workflow
+
+The repo is now CLI-ready and includes:
+
+- `supabase/config.toml`
+- `supabase/migrations/20260422_init_glai.sql`
+- `supabase/seed.sql`
+
+Useful commands:
+
+```bash
+supabase --version
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase migration new <name>
+supabase db push
+supabase db pull
+supabase start
+supabase stop
+```
+
+Recommended workflow:
+
+1. `supabase login`
+2. `supabase link --project-ref <project-ref>`
+3. edit or add SQL migrations in `supabase/migrations`
+4. `supabase db push` to apply them to the linked project
+
+For local Supabase development, `supabase start` requires Docker or a compatible container runtime.
+
+## Project structure
+
+```text
+app/                  Expo Router screens
+components/           Shared UI pieces
+constants/            App constants
+lib/ai/               OpenAI requests, schemas, validation
+lib/db/               SQLite schema and queries
+lib/supabase/         Supabase client and sync
+supabase/             CLI config and SQL migrations
+prd.md                Product requirements doc
+docs/                 planning/spec docs
+```
+
+## Security note
+
+This is still a v1 single-user architecture. Direct client-side Supabase sync with a publishable/anon key is convenient, but it is not a strong security boundary for broad distribution.
+
+Before shipping this beyond a trusted personal workflow, move writes behind either:
+
+- Supabase Auth plus real row-level security
+- a server or edge-function layer that owns privileged operations

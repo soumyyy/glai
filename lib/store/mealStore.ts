@@ -41,7 +41,12 @@ export const useMealStore = create<MealStore>((set) => ({
   draft: defaultDraft,
 
   setImage: (base64) =>
-    set((s) => ({ draft: { ...s.draft, imageBase64: base64 } })),
+    set(() => ({
+      draft: {
+        ...defaultDraft,
+        imageBase64: base64,
+      },
+    })),
 
   setPortion: (size, multiplier) =>
     set((s) => ({ draft: { ...s.draft, portionSize: size, portionMultiplier: multiplier } })),

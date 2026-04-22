@@ -28,7 +28,12 @@ interface ConfidenceBadgeProps {
 export function ConfidenceBadge({ confidence }: ConfidenceBadgeProps) {
   const level = getLevel(confidence);
   return (
-    <View style={[styles.badge, { backgroundColor: BADGE_COLORS[level] + '20', borderColor: BADGE_COLORS[level] }]}>
+    <View
+      style={[
+        styles.badge,
+        { backgroundColor: BADGE_COLORS[level] + '18', borderColor: BADGE_COLORS[level] + '50' },
+      ]}
+    >
       <Text style={[styles.text, { color: BADGE_COLORS[level] }]}>{BADGE_LABELS[level]}</Text>
     </View>
   );
@@ -37,10 +42,10 @@ export function ConfidenceBadge({ confidence }: ConfidenceBadgeProps) {
 const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
-  text: { fontSize: 12, fontWeight: '600' },
+  text: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
 });

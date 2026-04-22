@@ -1,3 +1,33 @@
+# Glai — Portion Screen Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the Portion screen (Screen 3) — shows a thumbnail of the captured photo, lets the user pick how much they ate, then fires the two GPT-4o calls on "Analyse". Applies the portion multiplier to all nutrition values before storing in mealStore and navigating to /review.
+
+**Architecture:** Read `imageBase64` from mealStore. Render a thumbnail. Use the existing `PortionPicker` component for portion selection. On "Analyse": call `identifyFoods` then `estimateNutrition`, apply portion multiplier to every nutrition field, call `mealStore.setAIResults`, navigate to `/review`. Retry once on timeout before showing error. No confidence shown in UI (still passed to setAIResults for DB storage).
+
+**Tech Stack:** expo-router, Zustand (mealStore), lib/ai/identify, lib/ai/estimate, components/PortionPicker
+
+---
+
+## File Map
+
+```
+app/portion.tsx        Replace: full portion selection + AI call screen
+```
+
+No new files needed — all dependencies already exist.
+
+---
+
+## Task 1: Build the Portion screen
+
+**Files:**
+- Replace: `app/portion.tsx`
+
+- [ ] **Step 1: Replace app/portion.tsx**
+
+```typescript
 // app/portion.tsx
 import { useState } from 'react';
 import {
@@ -33,34 +63,39 @@ function applyMultiplier(items: NutritionItem[], multiplier: number): NutritionI
   }));
 }
 
-async function runAnalysis(imageBase64: string) {
-  console.log('[Analysis] Starting identification step');
-  const identified = await identifyFoods(imageBase64);
-  console.log('[Analysis] Identification output', identified);
-
-  if (!identified.items.length) {
-    throw new Error('OpenAI did not return any detected food items.');
+async function runAnalysisWithRetry(imageBase64: string) {
+  async function attempt() {
+    const identified = await identifyFoods(imageBase64);
+    if (!identified.items.length) throw new Error('No food detected');
+    const estimated = await estimateNutrition(imageBase64, identified.items);
+    return estimated;
   }
 
-  console.log('[Analysis] Starting nutrition estimation step');
-  const estimated = await estimateNutrition(imageBase64, identified.items);
-  console.log('[Analysis] Estimation output', estimated);
-  return estimated;
+  try {
+    return await attempt();
+  } catch (firstErr) {
+    // Retry once automatically on any failure
+    try {
+      return await attempt();
+    } catch {
+      throw firstErr;
+    }
+  }
 }
 
 export default function PortionScreen() {
   const router = useRouter();
   const { draft, setPortion, setAIResults } = useMealStore();
-  const [portionSize, setPortionSize] = useState<PortionSize>(draft.portionSize);
+  const [portionSize, setPortionSize] = useState<PortionSize>('full');
   const [analysing, setAnalysing] = useState(false);
 
   const imageUri = draft.imageBase64
     ? `data:image/jpeg;base64,${draft.imageBase64}`
     : null;
 
-  function handlePortionSelect(size: PortionSize, multiplier: number) {
+  function handlePortionSelect(size: PortionSize) {
     setPortionSize(size);
-    setPortion(size, multiplier);
+    setPortion(size, PORTION_MULTIPLIERS[size]);
   }
 
   async function handleAnalyse() {
@@ -70,22 +105,16 @@ export default function PortionScreen() {
     }
     setAnalysing(true);
     try {
-      const result = await runAnalysis(draft.imageBase64);
-      const multiplier = draft.portionMultiplier || PORTION_MULTIPLIERS[portionSize];
+      const result = await runAnalysisWithRetry(draft.imageBase64);
+      const multiplier = PORTION_MULTIPLIERS[portionSize];
       const adjustedItems = applyMultiplier(result.items, multiplier);
-      console.log('[Analysis] Adjusted items after portion multiplier', {
-        portionSize,
-        multiplier,
-        adjustedItems,
-      });
       setAIResults(adjustedItems, result.overall_confidence, result.image_quality);
       router.push('/review');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[Analysis] Failed', err);
       Alert.alert(
         'Analysis failed',
-        `${message}\n\nCheck the Metro logs for the OpenAI response and try again or retake the photo.`,
+        `Could not analyse the photo. ${message}\n\nPlease try again or retake the photo.`,
         [
           { text: 'Retake', onPress: () => router.back() },
           { text: 'Retry', onPress: handleAnalyse },
@@ -110,7 +139,7 @@ export default function PortionScreen() {
 
         <View style={styles.content}>
           <Text style={styles.heading}>How much did you eat?</Text>
-          <Text style={styles.subheading}>Select how much of what&apos;s in the photo you ate</Text>
+          <Text style={styles.subheading}>Select how much of what's in the photo you ate</Text>
 
           <PortionPicker selected={portionSize} onSelect={handlePortionSelect} />
         </View>
@@ -194,3 +223,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 });
+```
+
+- [ ] **Step 2: Verify TypeScript**
+
+```bash
+cd /Users/soumya/Desktop/glai && npx tsc --noEmit 2>&1
+```
+
+Expected: Zero errors.
+
+- [ ] **Step 3: Commit and push**
+
+```bash
+cd /Users/soumya/Desktop/glai
+git add app/portion.tsx
+git commit -m "feat: build Portion screen with portion picker and GPT-4o two-step analysis"
+git push
+```

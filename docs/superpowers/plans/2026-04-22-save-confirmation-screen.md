@@ -1,8 +1,42 @@
+# Glai — Save Confirmation Screen Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the Save Confirmation screen (Screen 5) — auto-generates a meal name from AI items, lets the user tag meal type (auto-suggested by time of day), add optional notes, see a read-only macro summary, then saves to SQLite, triggers background Supabase sync, resets the meal store, and returns to Home.
+
+**Architecture:** Read `draft` from mealStore. Auto-generate meal name from item names (first 3 joined). Auto-suggest meal type from current hour. On "Save": call `saveMeal()`, `upsertDailySummary()`, `syncPendingMeals()` (background — don't await), `reset()`, then `router.replace('/')`.
+
+**Tech Stack:** expo-router, Zustand (mealStore), lib/db/meals (saveMeal), lib/db/summaries (upsertDailySummary), lib/supabase/sync (syncPendingMeals)
+
+---
+
+## File Map
+
+```
+app/save-confirmation.tsx     Replace: full Save Confirmation screen
+```
+
+---
+
+## Task 1: Build the Save Confirmation screen
+
+**Files:**
+- Replace: `app/save-confirmation.tsx`
+
+- [ ] **Step 1: Read existing app/save-confirmation.tsx first**
+
+```bash
+cat /Users/soumya/Desktop/glai/app/save-confirmation.tsx
+```
+
+- [ ] **Step 2: Replace app/save-confirmation.tsx**
+
+```typescript
 // app/save-confirmation.tsx
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMealStore } from '../lib/store/mealStore';
@@ -59,7 +93,9 @@ export default function SaveConfirmationScreen() {
     if (saving) return;
     setSaving(true);
     try {
-      const savedMeal = saveMeal({
+      const today = new Date().toISOString().slice(0, 10);
+
+      saveMeal({
         mealType,
         mealName: mealName.trim() || 'Meal',
         portionSize: draft.portionSize,
@@ -70,17 +106,13 @@ export default function SaveConfirmationScreen() {
         notes: notes.trim() || undefined,
       });
 
-      upsertDailySummary(savedMeal.loggedOnDate);
+      upsertDailySummary(today);
 
       // Background sync — don't block navigation
       syncPendingMeals().catch(() => {});
 
       reset();
       router.replace('/');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Please try again.';
-      Alert.alert('Could not save meal', message);
     } finally {
       setSaving(false);
     }
@@ -244,3 +276,21 @@ const styles = StyleSheet.create({
   saveDisabled: { opacity: 0.5 },
   saveText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });
+```
+
+- [ ] **Step 3: Verify TypeScript**
+
+```bash
+cd /Users/soumya/Desktop/glai && npx tsc --noEmit 2>&1
+```
+
+Expected: Zero errors.
+
+- [ ] **Step 4: Commit and push**
+
+```bash
+cd /Users/soumya/Desktop/glai
+git add app/save-confirmation.tsx
+git commit -m "feat: build Save Confirmation screen with meal naming, type tagging, SQLite save, and background sync"
+git push
+```

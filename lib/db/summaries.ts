@@ -21,7 +21,7 @@ export function upsertDailySummary(date: string): void {
        COALESCE(SUM(total_fat_g), 0),
        COALESCE(SUM(total_calories_kcal), 0),
        COUNT(*)
-     FROM meals WHERE user_id = ? AND date(created_at) = ?
+     FROM meals WHERE user_id = ? AND logged_on_date = ?
      ON CONFLICT(date, user_id) DO UPDATE SET
        total_carbs_g = excluded.total_carbs_g,
        total_protein_g = excluded.total_protein_g,

@@ -1,3 +1,37 @@
+# Glai — Review Screen Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the Review screen (Screen 4) — shows AI-identified items, lets user edit names/remove items/add missed items, live-updating totals bar, and "Confirm & Save" navigates to /save-confirmation. No confidence shown anywhere in UI.
+
+**Architecture:** Read `draft.items` from mealStore. Render each item with `MealItemRow`. Tapping an item opens an inline edit modal (bottom sheet style) to edit the dish name. Remove removes from store. "Add an item" opens the same modal with a blank name. TotalBar updates live as items change. "Confirm & Save" disabled when items list is empty. Navigate to /save-confirmation on confirm.
+
+**Tech Stack:** expo-router, Zustand (mealStore), components/MealItemRow, components/TotalBar
+
+---
+
+## File Map
+
+```
+app/review.tsx        Replace: full Review screen implementation
+```
+
+---
+
+## Task 1: Build the Review screen
+
+**Files:**
+- Replace: `app/review.tsx`
+
+- [ ] **Step 1: Read existing app/review.tsx first**
+
+```bash
+cat /Users/soumya/Desktop/glai/app/review.tsx
+```
+
+- [ ] **Step 2: Replace app/review.tsx**
+
+```typescript
 // app/review.tsx
 import { useState } from 'react';
 import {
@@ -87,7 +121,7 @@ export default function ReviewScreen() {
           />
         )}
         ListEmptyComponent={
-          <Text style={styles.empty}>No items. Tap Add an item below.</Text>
+          <Text style={styles.empty}>No items. Tap "Add an item" below.</Text>
         }
         ListFooterComponent={
           <TouchableOpacity style={styles.addButton} onPress={openAdd}>
@@ -107,7 +141,7 @@ export default function ReviewScreen() {
           disabled={!canSave}
           activeOpacity={0.85}
         >
-          <Text style={styles.confirmText}>Confirm & Save</Text>
+          <Text style={styles.confirmText}>Confirm &amp; Save</Text>
         </TouchableOpacity>
       </View>
 
@@ -240,3 +274,21 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
+```
+
+- [ ] **Step 3: Verify TypeScript**
+
+```bash
+cd /Users/soumya/Desktop/glai && npx tsc --noEmit 2>&1
+```
+
+Expected: Zero errors.
+
+- [ ] **Step 4: Commit and push**
+
+```bash
+cd /Users/soumya/Desktop/glai
+git add app/review.tsx
+git commit -m "feat: build Review screen with live totals, item edit/remove/add, and Confirm & Save"
+git push
+```
