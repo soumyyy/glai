@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore } from '../lib/store/mealStore';
-import { Atmosphere } from '../components/Atmosphere';
 import { identifyFoods } from '../lib/ai/identify';
 import { estimateNutrition } from '../lib/ai/estimate';
 import { Colors } from '../constants/colors';
@@ -15,11 +14,11 @@ import type { NutritionItem } from '../lib/ai/types';
 
 type AnalysingStep = 'identifying' | 'estimating' | null;
 
-const PORTION_OPTIONS: { label: string; sublabel: string; size: PortionSize; multiplier: number }[] = [
-  { label: '¼', sublabel: 'Quarter', size: 'quarter', multiplier: 0.25 },
-  { label: '½', sublabel: 'Half', size: 'half', multiplier: 0.5 },
-  { label: '¾', sublabel: 'Three-quarters', size: 'three-quarters', multiplier: 0.75 },
-  { label: '1', sublabel: 'Full plate', size: 'full', multiplier: 1.0 },
+const PORTIONS: { label: string; sub: string; size: PortionSize; multiplier: number }[] = [
+  { label: '¼', sub: 'Quarter', size: 'quarter', multiplier: 0.25 },
+  { label: '½', sub: 'Half', size: 'half', multiplier: 0.5 },
+  { label: '¾', sub: '¾ plate', size: 'three-quarters', multiplier: 0.75 },
+  { label: '1', sub: 'Full', size: 'full', multiplier: 1.0 },
 ];
 
 function applyMultiplier(items: NutritionItem[], multiplier: number): NutritionItem[] {
@@ -34,18 +33,19 @@ function applyMultiplier(items: NutritionItem[], multiplier: number): NutritionI
   }));
 }
 
-
 export default function PortionScreen() {
   const router = useRouter();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const isAddMore = mode === 'addmore';
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
   const { draft, setPortion, setAIResults, mergeItems } = useMealStore();
   const [portionSize, setPortionSize] = useState<PortionSize>('full');
   const [analysingStep, setAnalysingStep] = useState<AnalysingStep>(null);
 
   const activeBase64 = isAddMore ? draft.additionalImageBase64 : draft.imageBase64;
   const imageUri = activeBase64 ? `data:image/jpeg;base64,${activeBase64}` : null;
+  const photoHeight = screenHeight * 0.48;
 
   function handlePortionSelect(size: PortionSize, multiplier: number) {
     setPortionSize(size);
@@ -60,30 +60,24 @@ export default function PortionScreen() {
     try {
       setAnalysingStep('identifying');
       const identified = await identifyFoods(activeBase64);
-      if (!identified.items.length) {
-        throw new Error('No food items detected. Try retaking the photo.');
-      }
+      if (!identified.items.length) throw new Error('No food detected. Try retaking the photo.');
       setAnalysingStep('estimating');
       const result = await estimateNutrition(activeBase64, identified.items);
       const multiplier = draft.portionMultiplier || 1.0;
-      const adjustedItems = applyMultiplier(result.items, multiplier);
+      const adjusted = applyMultiplier(result.items, multiplier);
       if (isAddMore) {
-        mergeItems(adjustedItems);
+        mergeItems(adjusted);
         router.dismiss(2);
       } else {
-        setAIResults(adjustedItems, result.overall_confidence, result.image_quality);
+        setAIResults(adjusted, result.overall_confidence, result.image_quality);
         router.push('/review');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      Alert.alert(
-        'Analysis failed',
-        message,
-        [
-          { text: 'Retake', onPress: () => router.back() },
-          { text: 'Retry', onPress: handleAnalyse },
-        ],
-      );
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert('Analysis failed', msg, [
+        { text: 'Retake', onPress: () => router.back() },
+        { text: 'Retry', onPress: handleAnalyse },
+      ]);
     } finally {
       setAnalysingStep(null);
     }
@@ -92,76 +86,69 @@ export default function PortionScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <Atmosphere />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>Retake</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>
-            {isAddMore ? 'Add another dish' : 'How much did you eat?'}
+      {/* Photo — fills top portion of screen */}
+      <View style={[styles.photoWrap, { height: photoHeight }]}>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.photoPlaceholder]}>
+            <Text style={styles.photoPlaceholderText}>No photo</Text>
+          </View>
+        )}
+        {/* Retake button overlaid on photo */}
+        <TouchableOpacity
+          style={[styles.retakeBtn, { top: insets.top + 14 }]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.retakeBtnText}>{isAddMore ? 'Back' : 'Retake'}</Text>
+        </TouchableOpacity>
+        {/* Title overlaid at bottom of photo */}
+        <View style={styles.photoLabel}>
+          <Text style={styles.photoLabelText}>
+            {isAddMore ? 'Another dish' : 'How much did you eat?'}
           </Text>
         </View>
+      </View>
 
-        {/* Photo preview */}
-        <View style={styles.photoCard}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.photo} resizeMode="cover" />
-          ) : (
-            <View style={[styles.photo, styles.photoPlaceholder]}>
-              <Text style={styles.photoPlaceholderText}>No photo captured</Text>
-            </View>
-          )}
+      {/* Portion selector */}
+      <View style={styles.body}>
+        <Text style={styles.selectorHint}>Select your portion</Text>
+        <View style={styles.portionRow}>
+          {PORTIONS.map((opt) => {
+            const active = portionSize === opt.size;
+            return (
+              <TouchableOpacity
+                key={opt.size}
+                style={[styles.portionBtn, active && styles.portionBtnActive]}
+                onPress={() => handlePortionSelect(opt.size, opt.multiplier)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.portionFraction, active && styles.portionFractionActive]}>
+                  {opt.label}
+                </Text>
+                <Text style={[styles.portionSub, active && styles.portionSubActive]}>
+                  {opt.sub}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-
-        {/* Portion selector */}
-        <View style={styles.selectorCard}>
-          <Text style={styles.selectorLabel}>Portion size</Text>
-          <View style={styles.selectorRow}>
-            {PORTION_OPTIONS.map((opt) => {
-              const active = portionSize === opt.size;
-              return (
-                <TouchableOpacity
-                  key={opt.size}
-                  style={[styles.portionOption, active && styles.portionOptionActive]}
-                  onPress={() => handlePortionSelect(opt.size, opt.multiplier)}
-                  activeOpacity={0.78}
-                >
-                  <Text style={[styles.portionFraction, active && styles.portionFractionActive]}>
-                    {opt.label}
-                  </Text>
-                  <Text style={[styles.portionSublabel, active && styles.portionSublabelActive]}>
-                    {opt.sublabel}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </ScrollView>
+      </View>
 
       {/* CTA */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}>
         <TouchableOpacity
-          style={[styles.analyseButton, analysingStep !== null && styles.analyseDisabled]}
+          style={[styles.analyseBtn, analysingStep !== null && styles.analyseBtnDim]}
           onPress={handleAnalyse}
           disabled={analysingStep !== null}
           activeOpacity={0.85}
         >
-          <Text style={styles.analyseText}>Analyse meal</Text>
+          <Text style={styles.analyseBtnText}>Analyse meal</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Full-screen loading overlay */}
+      {/* Loading overlay */}
       {analysingStep !== null ? (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color={Colors.primary} size="large" />
@@ -182,140 +169,125 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    gap: 12,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surface,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  backText: {
-    color: Colors.text,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 33,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -0.9,
-  },
-  photoCard: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  photo: {
+
+  // Photo
+  photoWrap: {
     width: '100%',
-    height: 240,
+    backgroundColor: '#111',
+    overflow: 'hidden',
   },
   photoPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surfaceStrong,
   },
-  photoPlaceholderText: {
-    color: Colors.textMuted,
-    fontSize: 14,
+  photoPlaceholderText: { color: Colors.textMuted, fontSize: 14 },
+  retakeBtn: {
+    position: 'absolute',
+    left: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.52)',
   },
-  selectorCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    gap: 16,
+  retakeBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  photoLabel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
-  selectorLabel: {
-    fontSize: 13,
+  photoLabelText: {
+    color: '#fff',
+    fontSize: 17,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    letterSpacing: -0.3,
+  },
+
+  // Portion
+  body: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    gap: 14,
+  },
+  selectorHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
-  selectorRow: {
+  portionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
-  portionOption: {
+  portionBtn: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 14,
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    backgroundColor: Colors.surfaceStrong,
-    gap: 4,
+    backgroundColor: Colors.surface,
+    gap: 3,
   },
-  portionOptionActive: {
+  portionBtnActive: {
     borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '12',
+    backgroundColor: Colors.primary + '10',
   },
   portionFraction: {
     fontSize: 22,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     letterSpacing: -0.5,
   },
-  portionFractionActive: {
-    color: Colors.primary,
-  },
-  portionSublabel: {
+  portionFractionActive: { color: Colors.primary },
+  portionSub: {
     fontSize: 10,
     fontWeight: '600',
     color: Colors.textMuted,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  portionSublabelActive: {
-    color: Colors.primary,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  analyseButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 999,
-    paddingVertical: 17,
-    alignItems: 'center',
-  },
-  analyseDisabled: {
-    opacity: 0.6,
-  },
-  analyseText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
     letterSpacing: 0.2,
   },
+  portionSubActive: { color: Colors.primary },
+
+  // Footer
+  footer: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  analyseBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  analyseBtnDim: { opacity: 0.55 },
+  analyseBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+
+  // Loading
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 14,
   },
   loadingTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   loadingStep: {
     fontSize: 13,

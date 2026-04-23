@@ -9,34 +9,24 @@ import { useMealStore } from '../lib/store/mealStore';
 import { saveMeal } from '../lib/db/meals';
 import { upsertDailySummary } from '../lib/db/summaries';
 import { syncPendingMeals } from '../lib/supabase/sync';
-import { Atmosphere } from '../components/Atmosphere';
 import { Colors } from '../constants/colors';
 import type { MealType } from '../lib/db/meals';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
-};
 
 function suggestMealType(): MealType {
-  const hour = new Date().getHours();
-  if (hour < 10) return 'breakfast';
-  if (hour >= 12 && hour < 15) return 'lunch';
-  if (hour >= 19 && hour < 22) return 'dinner';
+  const h = new Date().getHours();
+  if (h < 10) return 'breakfast';
+  if (h >= 12 && h < 15) return 'lunch';
+  if (h >= 19 && h < 22) return 'dinner';
   return 'snack';
 }
 
 function generateMealName(items: { name: string }[]): string {
-  const names = items.slice(0, 3).map((i) => i.name).filter(Boolean);
-  return names.join(', ') || 'Meal';
+  return items.slice(0, 3).map((i) => i.name).filter(Boolean).join(', ') || 'Meal';
 }
 
-function whole(n: number) {
-  return Math.round(n).toString();
-}
+function whole(n: number) { return Math.round(n).toString(); }
 
 export default function SaveConfirmationScreen() {
   const router = useRouter();
@@ -62,12 +52,12 @@ export default function SaveConfirmationScreen() {
 
   async function handleSave() {
     if (saving || !canSave) return;
-    const finalMealName = mealName.trim() || generateMealName(draft.items) || 'Meal';
+    const finalName = mealName.trim() || generateMealName(draft.items) || 'Meal';
     setSaving(true);
     try {
-      const savedMeal = saveMeal({
+      const saved = saveMeal({
         mealType,
-        mealName: finalMealName,
+        mealName: finalName,
         portionSize: draft.portionSize,
         portionMultiplier: draft.portionMultiplier,
         items: draft.items,
@@ -75,78 +65,57 @@ export default function SaveConfirmationScreen() {
         imageQuality: draft.imageQuality,
         notes: notes.trim() || undefined,
       });
-      upsertDailySummary(savedMeal.loggedOnDate);
-      syncPendingMeals().catch((err) => console.warn('[Save] sync:failed', err));
+      upsertDailySummary(saved.loggedOnDate);
+      syncPendingMeals().catch((e) => console.warn('[Save] sync failed', e));
       reset();
       router.dismissAll();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Please try again.';
-      Alert.alert('Could not save meal', message);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Please try again.';
+      Alert.alert('Could not save meal', msg);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.screen}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Atmosphere />
 
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 140 },
+            { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 110 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <Text style={styles.backText}>Back</Text>
+          {/* Back + carb summary in one compact header */}
+          <View style={styles.topRow}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+              <Text style={styles.backBtnText}>Back</Text>
             </TouchableOpacity>
-            <Text style={styles.overline}>SAVE MEAL</Text>
-            <Text style={styles.title}>Name &amp; tag your meal</Text>
-            <Text style={styles.subtitle}>
-              Confirm the details before saving to your log.
-            </Text>
-          </View>
-
-          {/* Macro summary */}
-          <View style={styles.macroCard}>
-            <Text style={styles.macroCardLabel}>Meal totals</Text>
-            <View style={styles.macroRow}>
-              <View style={styles.macroItem}>
-                <Text style={[styles.macroValue, { color: Colors.carbs }]}>
-                  {whole(totals.carbsLow)}–{whole(totals.carbsHigh)}g
-                </Text>
-                <Text style={styles.macroLabel}>Carbs</Text>
-              </View>
-              <View style={styles.macroDivider} />
-              <View style={styles.macroItem}>
-                <Text style={[styles.macroValue, { color: Colors.protein }]}>{whole(totals.protein)}g</Text>
-                <Text style={styles.macroLabel}>Protein</Text>
-              </View>
-              <View style={styles.macroDivider} />
-              <View style={styles.macroItem}>
-                <Text style={[styles.macroValue, { color: Colors.fat }]}>{whole(totals.fat)}g</Text>
-                <Text style={styles.macroLabel}>Fat</Text>
-              </View>
-              <View style={styles.macroDivider} />
-              <View style={styles.macroItem}>
-                <Text style={[styles.macroValue, { color: Colors.calories }]}>{whole(totals.calories)}</Text>
-                <Text style={styles.macroLabel}>kcal</Text>
-              </View>
+            <View style={styles.carbSummary}>
+              <Text style={styles.carbValue}>
+                {whole(totals.carbsLow)}–{whole(totals.carbsHigh)}g
+              </Text>
+              <Text style={styles.carbLabel}>carbs</Text>
             </View>
-            <Text style={styles.macroSubnote}>{draft.items.length} item{draft.items.length === 1 ? '' : 's'} · {draft.portionSize} portion</Text>
           </View>
 
-          {/* Meal name */}
-          <View style={styles.fieldGroup}>
+          {/* Macro sub-line */}
+          <Text style={styles.macroLine}>
+            {whole(totals.protein)}g protein · {whole(totals.fat)}g fat · {whole(totals.calories)} kcal
+          </Text>
+          <Text style={styles.itemLine}>
+            {draft.items.length} item{draft.items.length !== 1 ? 's' : ''} · {draft.portionSize} portion
+          </Text>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Name field */}
+          <View style={styles.field}>
             <Text style={styles.fieldLabel}>Meal name</Text>
             <TextInput
               style={styles.fieldInput}
@@ -159,18 +128,18 @@ export default function SaveConfirmationScreen() {
           </View>
 
           {/* Meal type */}
-          <View style={styles.fieldGroup}>
+          <View style={styles.field}>
             <Text style={styles.fieldLabel}>Meal type</Text>
             <View style={styles.typeRow}>
-              {MEAL_TYPES.map((type) => (
+              {MEAL_TYPES.map((t) => (
                 <TouchableOpacity
-                  key={type}
-                  style={[styles.typeChip, mealType === type && styles.typeChipActive]}
-                  onPress={() => setMealType(type)}
-                  activeOpacity={0.78}
+                  key={t}
+                  style={[styles.typeChip, mealType === t && styles.typeChipActive]}
+                  onPress={() => setMealType(t)}
+                  activeOpacity={0.75}
                 >
-                  <Text style={[styles.typeChipText, mealType === type && styles.typeChipTextActive]}>
-                    {MEAL_TYPE_LABELS[type]}
+                  <Text style={[styles.typeChipText, mealType === t && styles.typeChipTextActive]}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -178,13 +147,13 @@ export default function SaveConfirmationScreen() {
           </View>
 
           {/* Notes */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Notes <Text style={styles.fieldOptional}>(optional)</Text></Text>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Notes <Text style={styles.optional}>(optional)</Text></Text>
             <TextInput
               style={[styles.fieldInput, styles.notesInput]}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Any notes about this meal…"
+              placeholder="Any notes…"
               placeholderTextColor={Colors.textMuted}
               multiline
               returnKeyType="done"
@@ -192,17 +161,17 @@ export default function SaveConfirmationScreen() {
           </View>
         </ScrollView>
 
-        {/* Save footer */}
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}>
           <TouchableOpacity
-            style={[styles.saveButton, (!canSave || saving) && styles.saveDisabled]}
+            style={[styles.saveBtn, (!canSave || saving) && styles.saveBtnDim]}
             onPress={handleSave}
             disabled={saving || !canSave}
             activeOpacity={0.85}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveText}>Save meal</Text>}
+              : <Text style={styles.saveBtnText}>Save meal</Text>}
           </TouchableOpacity>
         </View>
       </View>
@@ -212,134 +181,90 @@ export default function SaveConfirmationScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: 18, gap: 14 },
+
+  // Top
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    gap: 8,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.surface,
+  backBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  backText: {
-    color: Colors.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  overline: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  title: {
-    fontSize: 34,
-    lineHeight: 38,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1.2,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  macroCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 22,
-    gap: 16,
   },
-  macroCardLabel: {
-    fontSize: 13,
+  backBtnText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
+  carbSummary: { alignItems: 'flex-end' },
+  carbValue: {
+    fontSize: 28,
     fontWeight: '700',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    color: Colors.text,
+    letterSpacing: -1,
+    lineHeight: 32,
   },
-  macroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  macroItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  macroDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
-  },
-  macroValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  macroLabel: {
-    fontSize: 10,
+  carbLabel: {
+    fontSize: 11,
     color: Colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    textAlign: 'right',
   },
-  macroSubnote: {
+  macroLine: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+    marginTop: -4,
+  },
+  itemLine: {
     fontSize: 12,
     color: Colors.textMuted,
     textTransform: 'capitalize',
+    marginTop: -6,
   },
-  fieldGroup: {
-    gap: 10,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginVertical: 2,
   },
+
+  // Fields
+  field: { gap: 8 },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
   },
-  fieldOptional: {
+  optional: {
     fontWeight: '400',
     textTransform: 'none',
     letterSpacing: 0,
-    fontSize: 12,
+    fontSize: 11,
   },
   fieldInput: {
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     fontSize: 16,
     color: Colors.text,
     backgroundColor: Colors.surface,
   },
-  notesInput: {
-    minHeight: 88,
-    textAlignVertical: 'top',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  notesInput: { minHeight: 72, textAlignVertical: 'top' },
+
+  // Meal type
+  typeRow: { flexDirection: 'row', gap: 8 },
   typeChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 11,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1.5,
     borderColor: Colors.border,
@@ -347,40 +272,33 @@ const styles = StyleSheet.create({
   },
   typeChipActive: {
     borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '12',
+    backgroundColor: Colors.primary + '10',
   },
   typeChipText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     color: Colors.textSecondary,
   },
-  typeChipTextActive: {
-    color: Colors.primary,
-  },
+  typeChipTextActive: { color: Colors.primary },
+
+  // Footer
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
   },
-  saveButton: {
-    backgroundColor: Colors.success,
-    borderRadius: 999,
-    paddingVertical: 17,
+  saveBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  saveDisabled: {
-    opacity: 0.5,
-  },
-  saveText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
+  saveBtnDim: { opacity: 0.5 },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.1 },
 });

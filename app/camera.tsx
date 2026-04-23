@@ -1,12 +1,6 @@
-// app/camera.tsx
 import { useRef, useState } from 'react';
 import {
-  View,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
+  View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -77,7 +71,6 @@ export default function CameraScreen() {
       <View style={styles.permissionScreen}>
         <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator color={Colors.primary} />
-        <Text style={styles.permissionTitle}>Preparing camera...</Text>
       </View>
     );
   }
@@ -86,17 +79,15 @@ export default function CameraScreen() {
     return (
       <View style={styles.permissionScreen}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Text style={styles.permissionEyebrow}>Camera access</Text>
-        <Text style={styles.permissionTitle}>Glai needs camera permission to capture meals.</Text>
+        <Text style={styles.permissionTitle}>Camera access needed</Text>
         <Text style={styles.permissionCopy}>
-          You can still use the gallery once permission is granted, but the core logging flow starts
-          from the camera.
+          Glai uses the camera to photograph your meals and identify them.
         </Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Allow camera</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.permissionSecondary} onPress={handleGallery}>
-          <Text style={styles.permissionSecondaryText}>Choose from gallery instead</Text>
+          <Text style={styles.permissionSecondaryText}>Use gallery instead</Text>
         </TouchableOpacity>
       </View>
     );
@@ -113,67 +104,53 @@ export default function CameraScreen() {
       />
 
       <View pointerEvents="box-none" style={styles.overlay}>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <Text style={styles.closeText}>{isAddMore ? 'Back' : 'Close'}</Text>
+        {/* Top controls */}
+        <View style={[styles.topBar, { paddingTop: insets.top + 14 }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.pill}>
+            <Text style={styles.pillText}>{isAddMore ? 'Back' : 'Close'}</Text>
           </TouchableOpacity>
-          <View style={styles.readyPill}>
-            <Text style={styles.readyText}>{cameraReady ? 'Ready' : 'Loading'}</Text>
-          </View>
+          {!cameraReady && (
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>Loading…</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.centerZone}>
+        {/* Frame guide */}
+        <View style={styles.frameZone}>
           <View style={styles.frame}>
-            <View style={styles.frameCornerTopLeft} />
-            <View style={styles.frameCornerTopRight} />
-            <View style={styles.frameCornerBottomLeft} />
-            <View style={styles.frameCornerBottomRight} />
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
           </View>
+          <Text style={styles.frameHint}>Keep the full plate inside</Text>
         </View>
 
-        <View style={[styles.bottomZone, { paddingBottom: Math.max(insets.bottom, 18) }]}>
-          <View style={styles.captionCard}>
-            <Text style={styles.captionEyebrow}>Capture</Text>
-            <Text style={styles.captionTitle}>Keep the full plate inside the frame.</Text>
-            <Text style={styles.captionCopy}>
-              Good lighting and a straight top-down angle improve dish detection and carb estimates.
-            </Text>
-          </View>
+        {/* Bottom bar */}
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <TouchableOpacity
+            style={styles.galleryPill}
+            onPress={handleGallery}
+            disabled={processing}
+          >
+            <Text style={styles.pillText}>Gallery</Text>
+          </TouchableOpacity>
 
-          <View style={styles.bottomBar}>
-            <TouchableOpacity
-              onPress={handleGallery}
-              style={styles.galleryButton}
-              disabled={processing}
-            >
-              <Text style={styles.galleryText}>Gallery</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.shutter, (!cameraReady || processing) && styles.shutterDim]}
+            onPress={handleCapture}
+            disabled={!cameraReady || processing}
+            activeOpacity={0.85}
+          >
+            {processing
+              ? <ActivityIndicator color="#1F1813" size="small" />
+              : <View style={styles.shutterDot} />}
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleCapture}
-              style={[styles.shutterButton, (processing || !cameraReady) && styles.shutterDisabled]}
-              disabled={processing || !cameraReady}
-              activeOpacity={0.8}
-            >
-              {processing ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <View style={styles.shutterInner} />
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.spacer} />
-          </View>
+          <View style={styles.shutterSpacer} />
         </View>
       </View>
-
-      {processing ? (
-        <View style={styles.processingOverlay}>
-          <ActivityIndicator color="#fff" size="large" />
-          <Text style={styles.processingTitle}>Preparing photo</Text>
-          <Text style={styles.processingCopy}>Compressing image before analysis...</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -185,231 +162,120 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
   },
+
+  // Permission
   permissionScreen: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     justifyContent: 'center',
-  },
-  permissionEyebrow: {
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    marginBottom: 12,
+    gap: 12,
   },
   permissionTitle: {
-    fontSize: 28,
-    lineHeight: 34,
-    color: Colors.text,
+    fontSize: 26,
     fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.8,
+    marginBottom: 4,
   },
   permissionCopy: {
-    marginTop: 12,
     fontSize: 15,
     lineHeight: 22,
     color: Colors.textSecondary,
   },
   permissionButton: {
-    marginTop: 24,
+    marginTop: 12,
     backgroundColor: Colors.primary,
-    borderRadius: 16,
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  permissionButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   permissionSecondary: {
-    marginTop: 12,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingVertical: 16,
+    paddingVertical: 15,
     alignItems: 'center',
-    backgroundColor: Colors.surfaceStrong,
+    backgroundColor: Colors.surface,
   },
-  permissionSecondaryText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  permissionSecondaryText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '600' },
 
-  header: {
-    paddingHorizontal: 20,
+  // Camera UI
+  topBar: {
+    paddingHorizontal: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  closeButton: {
-    alignSelf: 'flex-start',
+  pill: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.52)',
   },
-  closeText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  centerZone: {
+  pillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  frameZone: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
+    gap: 16,
+    paddingHorizontal: 32,
   },
   frame: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 300,
     aspectRatio: 1,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
   },
-  frameCornerTopLeft: {
+  corner: {
     position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 34,
-    height: 34,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
+    width: 28,
+    height: 28,
     borderColor: '#fff',
-    borderTopLeftRadius: 14,
   },
-  frameCornerTopRight: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 34,
-    height: 34,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#fff',
-    borderTopRightRadius: 14,
-  },
-  frameCornerBottomLeft: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    width: 34,
-    height: 34,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderColor: '#fff',
-    borderBottomLeftRadius: 14,
-  },
-  frameCornerBottomRight: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    width: 34,
-    height: 34,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#fff',
-    borderBottomRightRadius: 14,
-  },
-  bottomZone: {
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  captionCard: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 340,
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-    gap: 6,
-  },
-  captionEyebrow: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
-  captionTitle: {
-    color: '#fff',
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: '700',
-  },
-  captionCopy: {
-    color: 'rgba(255,255,255,0.76)',
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
+  frameHint: {
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 13,
-    lineHeight: 19,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 
   bottomBar: {
+    paddingHorizontal: 28,
+    paddingTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  galleryButton: {
-    minWidth: 84,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  galleryPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    minWidth: 80,
     alignItems: 'center',
   },
-  galleryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  spacer: {
-    minWidth: 84,
-  },
-
-  shutterButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  shutter: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  shutterDisabled: { opacity: 0.5 },
-  shutterInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  shutterDim: { opacity: 0.45 },
+  shutterDot: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#fff',
   },
-  readyPill: {
-    minWidth: 82,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-  },
-  readyText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  processingTitle: {
-    marginTop: 16,
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  processingCopy: {
-    marginTop: 8,
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 14,
-    textAlign: 'center',
-  },
+  shutterSpacer: { minWidth: 80 },
 });

@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Alert, useWindowDimensions,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore } from '../lib/store/mealStore';
-import { Atmosphere } from '../components/Atmosphere';
 import { Colors } from '../constants/colors';
 import type { NutritionItem } from '../lib/ai/types';
 
@@ -34,10 +33,13 @@ function whole(n: number) {
 export default function ReviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { draft, updateItem, removeItem, addItem } = useMealStore();
   const [editState, setEditState] = useState<EditState | null>(null);
 
   const canSave = draft.items.length > 0;
+  const imageUri = draft.imageBase64 ? `data:image/jpeg;base64,${draft.imageBase64}` : null;
+  const photoHeight = screenWidth * 0.56; // 16:9-ish ratio
 
   const totals = draft.items.reduce(
     (acc, item) => ({
@@ -53,15 +55,12 @@ export default function ReviewScreen() {
   function openEdit(index: number) {
     setEditState({ index, name: draft.items[index].name });
   }
-
   function openAdd() {
     setEditState({ index: null, name: '' });
   }
-
   function closeEdit() {
     setEditState(null);
   }
-
   function commitEdit() {
     if (!editState) return;
     const trimmed = editState.name.trim();
@@ -73,7 +72,6 @@ export default function ReviewScreen() {
     }
     closeEdit();
   }
-
   function handleRemove(index: number) {
     Alert.alert('Remove item', `Remove "${draft.items[index].name}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -84,98 +82,93 @@ export default function ReviewScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <Atmosphere />
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 140 },
-        ]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 148 }}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Review your meal</Text>
-          <Text style={styles.subtitle}>Tap any item to correct the name.</Text>
-        </View>
-
-        {/* Items */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Identified items</Text>
-          <Text style={styles.sectionCaption}>{draft.items.length} item{draft.items.length === 1 ? '' : 's'} detected</Text>
-        </View>
-
-        {draft.items.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No items detected.</Text>
-            <Text style={styles.emptySubtext}>Tap &quot;Add an item&quot; below to add one manually.</Text>
+        {/* Photo */}
+        {imageUri ? (
+          <View style={[styles.photoWrap, { height: photoHeight }]}>
+            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <TouchableOpacity
+              style={[styles.backBtn, { top: insets.top + 14 }]}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backBtnText}>Back</Text>
+            </TouchableOpacity>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.photoWrap, styles.photoPlaceholder, { height: 80, marginTop: insets.top }]}>
+            <TouchableOpacity style={styles.backBtnDark} onPress={() => router.back()}>
+              <Text style={styles.backBtnDarkText}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-        {draft.items.map((item, index) => (
-          <View key={index} style={styles.itemCard}>
-            <View style={styles.itemHeader}>
-              <TouchableOpacity style={styles.itemNameButton} onPress={() => openEdit(index)}>
+        {/* Header strip */}
+        <View style={styles.headerStrip}>
+          <Text style={styles.headerTitle}>Review your meal</Text>
+          <Text style={styles.headerCount}>
+            {draft.items.length} item{draft.items.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+
+        {/* Items list */}
+        <View style={styles.list}>
+          {draft.items.length === 0 ? (
+            <View style={styles.emptyRow}>
+              <Text style={styles.emptyText}>No items detected — add one below.</Text>
+            </View>
+          ) : null}
+
+          {draft.items.map((item, index) => (
+            <View key={index} style={styles.itemRow}>
+              <TouchableOpacity
+                style={styles.itemMain}
+                onPress={() => openEdit(index)}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemEditHint}>tap to edit</Text>
+                <Text style={styles.itemCarbs}>
+                  {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g carbs
+                </Text>
+                <Text style={styles.itemMacros}>
+                  {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.removeButton} onPress={() => handleRemove(index)}>
-                <Text style={styles.removeText}>Remove</Text>
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => handleRemove(index)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.removeBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
+          ))}
+        </View>
 
-            <Text style={styles.itemCarbs}>
-              {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g carbs
-            </Text>
-
-            <View style={styles.itemMacroRow}>
-              <View style={styles.itemMacro}>
-                <Text style={styles.itemMacroValue}>{whole(item.protein_g)}g</Text>
-                <Text style={styles.itemMacroLabel}>Protein</Text>
-              </View>
-              <View style={styles.itemMacroDivider} />
-              <View style={styles.itemMacro}>
-                <Text style={styles.itemMacroValue}>{whole(item.fat_g)}g</Text>
-                <Text style={styles.itemMacroLabel}>Fat</Text>
-              </View>
-              <View style={styles.itemMacroDivider} />
-              <View style={styles.itemMacro}>
-                <Text style={styles.itemMacroValue}>{whole(item.calories_kcal)}</Text>
-                <Text style={styles.itemMacroLabel}>kcal</Text>
-              </View>
-              <View style={styles.itemMacroDivider} />
-              <View style={styles.itemMacro}>
-                <Text style={styles.itemMacroValue}>~{whole(item.estimated_weight_g)}g</Text>
-                <Text style={styles.itemMacroLabel}>Weight</Text>
-              </View>
-            </View>
-
-            {item.ai_notes ? (
-              <Text style={styles.itemNotes}>{item.ai_notes}</Text>
-            ) : null}
-          </View>
-        ))}
-
-        {/* Add more */}
+        {/* Add row */}
         <View style={styles.addRow}>
           <TouchableOpacity
-            style={styles.addScanButton}
+            style={styles.addScanBtn}
             onPress={() => router.push('/camera?mode=addmore')}
             activeOpacity={0.78}
           >
             <Text style={styles.addScanText}>Scan another dish</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addManualButton} onPress={openAdd} activeOpacity={0.78}>
+          <TouchableOpacity
+            style={styles.addManualBtn}
+            onPress={openAdd}
+            activeOpacity={0.78}
+          >
             <Text style={styles.addManualText}>Add manually</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Total bar + CTA */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
+      {/* Fixed footer */}
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}>
         <View style={styles.totalRow}>
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>
@@ -183,14 +176,17 @@ export default function ReviewScreen() {
             </Text>
             <Text style={styles.totalLabel}>Carbs</Text>
           </View>
+          <View style={styles.totalDivider} />
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{whole(totals.protein)}g</Text>
             <Text style={styles.totalLabel}>Protein</Text>
           </View>
+          <View style={styles.totalDivider} />
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{whole(totals.fat)}g</Text>
             <Text style={styles.totalLabel}>Fat</Text>
           </View>
+          <View style={styles.totalDivider} />
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{whole(totals.calories)}</Text>
             <Text style={styles.totalLabel}>kcal</Text>
@@ -198,30 +194,27 @@ export default function ReviewScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, !canSave && styles.confirmDisabled]}
+          style={[styles.confirmBtn, !canSave && styles.confirmBtnDim]}
           onPress={() => router.push('/save-confirmation')}
           disabled={!canSave}
           activeOpacity={0.85}
         >
-          <Text style={styles.confirmText}>Confirm &amp; Save</Text>
+          <Text style={styles.confirmBtnText}>Confirm &amp; Save</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Edit modal */}
+      {/* Edit sheet */}
       <Modal visible={editState !== null} transparent animationType="slide" onRequestClose={closeEdit}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeEdit} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.sheet}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>
-            {editState?.index === null ? 'Add item' : 'Edit item name'}
+            {editState?.index === null ? 'Add item' : 'Edit name'}
           </Text>
           <TextInput
             style={styles.sheetInput}
             value={editState?.name ?? ''}
-            onChangeText={(text) => setEditState((s) => s ? { ...s, name: text } : s)}
+            onChangeText={(t) => setEditState((s) => s ? { ...s, name: t } : s)}
             placeholder="e.g. Steamed white rice"
             placeholderTextColor={Colors.textMuted}
             autoFocus
@@ -245,206 +238,161 @@ export default function ReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  screen: { flex: 1, backgroundColor: Colors.background },
+
+  // Photo
+  photoWrap: {
+    width: '100%',
+    backgroundColor: '#111',
+    overflow: 'hidden',
   },
-  content: {
-    paddingHorizontal: 20,
-    gap: 14,
+  photoPlaceholder: {
+    backgroundColor: Colors.surfaceStrong,
+    paddingHorizontal: 18,
+    justifyContent: 'flex-end',
+    paddingBottom: 12,
   },
-  header: {
-    gap: 8,
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.52)',
   },
-  backButton: {
+  backBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  backBtnDark: {
     alignSelf: 'flex-start',
-    backgroundColor: Colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  backText: {
-    color: Colors.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 33,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -0.9,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  sectionHeader: {
-    marginTop: 4,
-    gap: 2,
-  },
-  sectionTitle: {
-    fontSize: 21,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.6,
-  },
-  sectionCaption: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  emptyCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    gap: 8,
-    alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  itemCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 18,
-    gap: 12,
-  },
-  itemHeader: {
+  backBtnDarkText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
+
+  // Header strip
+  headerStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'baseline',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
-  itemNameButton: {
-    flex: 1,
-    gap: 2,
-  },
-  itemName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    lineHeight: 23,
-  },
-  itemEditHint: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    letterSpacing: 0.3,
-  },
-  removeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceStrong,
-  },
-  removeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.error,
-  },
-  itemCarbs: {
+  headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.carbs,
-    letterSpacing: -0.4,
+    color: Colors.text,
+    letterSpacing: -0.5,
   },
-  itemMacroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  itemMacro: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  itemMacroDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: Colors.border,
-  },
-  itemMacroValue: {
+  headerCount: {
     fontSize: 13,
+    color: Colors.textMuted,
+    fontWeight: '500',
+  },
+
+  // Items
+  list: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    marginTop: 8,
+  },
+  emptyRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    gap: 12,
+  },
+  itemMain: { flex: 1, gap: 4 },
+  itemName: {
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
+    letterSpacing: -0.2,
+    textDecorationLine: 'underline',
+    textDecorationColor: Colors.border,
   },
-  itemMacroLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    letterSpacing: 0.4,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+  itemCarbs: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.carbs,
+    letterSpacing: -0.2,
   },
-  itemNotes: {
+  itemMacros: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-    fontStyle: 'italic',
+    color: Colors.textMuted,
+    fontWeight: '500',
   },
+  removeBtn: {
+    paddingTop: 2,
+  },
+  removeBtnText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    fontWeight: '400',
+  },
+
+  // Add row
   addRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingTop: 14,
   },
-  addScanButton: {
+  addScanBtn: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: 12,
     backgroundColor: Colors.primary,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  addScanText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  addManualButton: {
+  addScanText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  addManualBtn: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
     backgroundColor: Colors.surface,
   },
-  addManualText: {
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  addManualText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 14 },
+
+  // Footer
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    backgroundColor: Colors.surfaceStrong,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    gap: 14,
+    gap: 12,
   },
   totalRow: {
     flexDirection: 'row',
-  },
-  totalItem: {
-    flex: 1,
     alignItems: 'center',
-    gap: 2,
+  },
+  totalItem: { flex: 1, alignItems: 'center', gap: 2 },
+  totalDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    backgroundColor: Colors.border,
   },
   totalValue: {
     fontSize: 14,
@@ -456,87 +404,72 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
-  confirmButton: {
+  confirmBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 999,
-    paddingVertical: 17,
+    borderRadius: 12,
+    paddingVertical: 15,
     alignItems: 'center',
   },
-  confirmDisabled: {
-    opacity: 0.4,
-  },
-  confirmText: {
+  confirmBtnDim: { opacity: 0.4 },
+  confirmBtnText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
-  // Modal
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-  },
+
+  // Edit sheet
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: {
     backgroundColor: Colors.surfaceStrong,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 40,
-    gap: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 22,
+    paddingBottom: 36,
+    gap: 14,
   },
   sheetHandle: {
     alignSelf: 'center',
-    width: 36,
+    width: 32,
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.border,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   sheetTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   sheetInput: {
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     fontSize: 16,
     color: Colors.text,
     backgroundColor: Colors.background,
   },
-  sheetActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  sheetActions: { flexDirection: 'row', gap: 10 },
   sheetCancel: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 999,
+    paddingVertical: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
-    backgroundColor: Colors.surfaceStrong,
   },
-  sheetCancelText: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    fontSize: 15,
-  },
+  sheetCancelText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 15 },
   sheetSave: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 999,
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: Colors.primary,
     alignItems: 'center',
   },
-  sheetSaveText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-  },
+  sheetSaveText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
