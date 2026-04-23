@@ -19,6 +19,11 @@
 - Removed the user upsert block entirely. User data is local-only in v1; there is no auth and no need to sync it to Supabase.
 - Removed the now-unused `getLocalUser` import.
 - Meals, meal_items, and daily_summaries sync proceeds correctly.
+- Added pending delete processing so deleting a cloud-synced meal locally also deletes it from Supabase on the next background sync.
+
+### `lib/db/schema.ts` / `lib/db/meals.ts`
+- Added a local `pending_deletes` queue for synced meals that are deleted offline or before a successful cloud delete.
+- `deleteMeal()` now queues cloud deletion before removing the local row, then Meal Detail recomputes the daily summary.
 
 ### `app/portion.tsx`
 - Added `Atmosphere` orbs background.
@@ -64,4 +69,4 @@ CREATE POLICY "anon_all_daily_summaries" ON daily_summaries FOR ALL TO anon USIN
 - Verify meals are appearing in the Supabase dashboard after logging
 - Consider adding a visible sync status indicator on the Home screen
 - CSV export (in PRD scope for v1)
-- Delete meal from Meal Detail screen (PRD scope)
+- Hardening around delete retries and visible sync status

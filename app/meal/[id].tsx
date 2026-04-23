@@ -4,37 +4,30 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
-import { ConfidenceBadge } from '../../components/ConfidenceBadge';
-import { MacroCard } from '../../components/MacroCard';
 import { Colors } from '../../constants/colors';
 import { deleteMeal, getMealById, getMealItems, type MealItemRow, type MealRow } from '../../lib/db/meals';
 import { upsertDailySummary } from '../../lib/db/summaries';
+import { syncPendingMeals } from '../../lib/supabase/sync';
 
 function formatMealTime(dateString: string) {
   return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
+    weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit',
   }).format(new Date(dateString));
 }
 
-function whole(value: number) {
-  return Math.round(value).toString();
-}
+function whole(n: number) { return Math.round(n).toString(); }
 
 export default function MealDetailScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const router    = useRouter();
+  const insets    = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [meal, setMeal] = useState<MealRow | null>(null);
+  const { id }    = useLocalSearchParams<{ id: string }>();
+  const [meal, setMeal]   = useState<MealRow | null>(null);
   const [items, setItems] = useState<MealItemRow[]>([]);
 
   useEffect(() => {
     if (!isFocused || !id) return;
-
     setMeal(getMealById(id));
     setItems(getMealItems(id));
   }, [id, isFocused]);
@@ -43,15 +36,15 @@ export default function MealDetailScreen() {
     if (!meal) return;
     Alert.alert(
       'Delete meal',
-      `Remove "${meal.meal_name}" permanently? This cannot be undone.`,
+      `Remove "${meal.meal_name}" permanently?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: 'Delete', style: 'destructive',
           onPress: () => {
             deleteMeal(meal.id);
             upsertDailySummary(meal.logged_on_date);
+            syncPendingMeals().catch(e => console.warn('[Delete] sync failed', e));
             router.back();
           },
         },
@@ -61,363 +54,194 @@ export default function MealDetailScreen() {
 
   if (!meal) {
     return (
-      <View style={styles.screen}>
+      <View style={s.screen}>
         <Stack.Screen options={{ headerShown: false }} />
         <Atmosphere />
-        <View style={[styles.emptyState, { paddingTop: insets.top + 32 }]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>Back</Text>
+        <View style={[s.empty, { paddingTop: insets.top + 24 }]}>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+            <Text style={s.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.emptyTitle}>Meal not found.</Text>
-          <Text style={styles.emptyCopy}>
-            The record may have been removed locally or never saved on this device.
-          </Text>
+          <Text style={s.emptyTitle}>Meal not found</Text>
         </View>
       </View>
     );
   }
 
+  const macros = [
+    { label: 'Carbs',   value: `${whole(meal.total_carbs_low_g)}–${whole(meal.total_carbs_high_g)}g`, color: Colors.carbs },
+    { label: 'Protein', value: `${whole(meal.total_protein_g)}g`,   color: Colors.protein },
+    { label: 'Fat',     value: `${whole(meal.total_fat_g)}g`,        color: Colors.fat },
+    { label: 'kcal',    value: whole(meal.total_calories_kcal),       color: Colors.calories },
+  ];
+
   return (
-    <View style={styles.screen}>
+    <View style={s.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <Atmosphere />
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 32 },
-        ]}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.overline}>MEAL DETAIL</Text>
-          <Text style={styles.title}>{meal.meal_name}</Text>
-          <Text style={styles.subtitle}>{formatMealTime(meal.created_at)}</Text>
-        </View>
+        {/* Header */}
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <Text style={s.backText}>← Back</Text>
+        </TouchableOpacity>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={styles.typePill}>
-              <Text style={styles.typePillText}>{meal.meal_type}</Text>
-            </View>
-            <View style={styles.syncPill}>
-              <Text style={styles.syncPillText}>
-                {meal.synced_to_cloud ? 'Synced' : 'Pending sync'}
-              </Text>
-            </View>
+        <View style={s.titleBlock}>
+          <View style={s.titleRow}>
+            <Text style={s.mealType}>{meal.meal_type}</Text>
+            {meal.notes ? null : null}
           </View>
+          <Text style={s.mealName}>{meal.meal_name}</Text>
+          <Text style={s.mealTime}>{formatMealTime(meal.created_at)}</Text>
+        </View>
 
-          <View style={styles.badgeRow}>
-            <ConfidenceBadge confidence={meal.ai_confidence} />
-            <View style={styles.imageQualityPill}>
-              <Text style={styles.imageQualityText}>{meal.image_quality} image</Text>
+        {/* Note */}
+        {meal.notes ? (
+          <View style={s.noteCard}>
+            <Text style={s.noteText}>{meal.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* Macro strip */}
+        <View style={s.macroStrip}>
+          {macros.map((m, i) => (
+            <View key={m.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              {i > 0 && <View style={s.macroDiv} />}
+              <View style={s.macroItem}>
+                <Text style={[s.macroValue, { color: m.color }]}>{m.value}</Text>
+                <Text style={s.macroLabel}>{m.label}</Text>
+              </View>
             </View>
-          </View>
-
-          {meal.notes ? <Text style={styles.noteText}>{meal.notes}</Text> : null}
+          ))}
         </View>
 
-        <View style={styles.grid}>
-          <MacroCard
-            label="Carbs"
-            value={`${whole(meal.total_carbs_low_g)}-${whole(meal.total_carbs_high_g)}g`}
-            color={Colors.carbs}
-          />
-          <MacroCard
-            label="Protein"
-            value={`${whole(meal.total_protein_g)}g`}
-            color={Colors.protein}
-          />
-          <MacroCard
-            label="Fat"
-            value={`${whole(meal.total_fat_g)}g`}
-            color={Colors.fat}
-          />
-          <MacroCard
-            label="Calories"
-            value={whole(meal.total_calories_kcal)}
-            color={Colors.calories}
-          />
-        </View>
-
-        <View style={styles.metaCard}>
-          <Text style={styles.metaTitle}>Log settings</Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Portion</Text>
-            <Text style={styles.metaValue}>
-              {meal.portion_size} ({meal.portion_multiplier}x)
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Items</Text>
-          <Text style={styles.sectionCaption}>What the model recorded for this meal.</Text>
-        </View>
-
-        {items.map((item) => (
-          <View key={item.id} style={styles.itemCard}>
-            <View style={styles.itemHeader}>
-              <Text style={styles.itemName}>{item.corrected_name ?? item.ai_identified_name}</Text>
-              <Text style={styles.itemWeight}>{whole(item.estimated_weight_g)}g</Text>
+        {/* Items */}
+        <Text style={s.sectionTitle}>Items</Text>
+        <View style={s.itemsCard}>
+          {items.map((item, i) => (
+            <View key={item.id}>
+              {i > 0 && <View style={s.itemDivider} />}
+              <View style={s.itemRow}>
+                <View style={s.itemLeft}>
+                  <Text style={s.itemName}>{item.corrected_name ?? item.ai_identified_name}</Text>
+                  <Text style={s.itemMacros}>
+                    {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
+                  </Text>
+                </View>
+                <Text style={s.itemCarbs}>
+                  {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g
+                </Text>
+              </View>
             </View>
+          ))}
+        </View>
 
-            {item.corrected_name ? (
-              <Text style={styles.itemOriginal}>AI originally identified: {item.ai_identified_name}</Text>
-            ) : null}
-
-            <Text style={styles.itemCarbs}>
-              {whole(item.carbs_low_g)}-{whole(item.carbs_high_g)}g carbs
-            </Text>
-            <Text style={styles.itemMacros}>
-              Protein {whole(item.protein_g)}g · Fat {whole(item.fat_g)}g · Calories {whole(item.calories_kcal)}
-            </Text>
-
-            {item.ai_notes ? <Text style={styles.itemNotes}>{item.ai_notes}</Text> : null}
-          </View>
-        ))}
-
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.78}>
-          <Text style={styles.deleteText}>Delete meal</Text>
+        {/* Delete */}
+        <TouchableOpacity style={s.deleteBtn} onPress={handleDelete} activeOpacity={0.78}>
+          <Text style={s.deleteText}>Delete meal</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    gap: 8,
-  },
-  backButton: {
+const s = StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: 20, gap: 14 },
+
+  empty: { flex: 1, paddingHorizontal: 20, gap: 16 },
+  emptyTitle: { fontSize: 22, fontWeight: '700', color: Colors.text },
+
+  backBtn: {
     alignSelf: 'flex-start',
     backgroundColor: Colors.surface,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  backText: {
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  overline: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  title: {
-    fontSize: 34,
-    lineHeight: 38,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1.2,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-  },
-  heroCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    gap: 16,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  typePill: {
-    backgroundColor: Colors.surfaceStrong,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  typePillText: {
-    color: Colors.text,
-    fontSize: 12,
-    textTransform: 'capitalize',
+  backText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+
+  titleBlock: { gap: 4 },
+  titleRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mealType: {
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  syncPill: {
-    backgroundColor: Colors.surfaceStrong,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  syncPillText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    alignItems: 'center',
-  },
-  imageQualityPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceStrong,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  imageQualityText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  noteText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 21,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  metaCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 18,
-    gap: 10,
-  },
-  metaTitle: {
-    fontSize: 19,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  metaLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  metaValue: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  sectionHeader: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 23,
+  mealName: {
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.text,
     letterSpacing: -0.8,
+    lineHeight: 33,
   },
-  sectionCaption: {
-    marginTop: 4,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  itemCard: {
+  mealTime: { fontSize: 13, color: Colors.textSecondary },
+
+  noteCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 26,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 18,
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  itemHeader: {
+  noteText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+
+  macroStrip: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
     flexDirection: 'row',
+    paddingVertical: 12,
+  },
+  macroItem:  { flex: 1, alignItems: 'center', gap: 3 },
+  macroDiv:   { width: 1, height: 24, backgroundColor: Colors.border, alignSelf: 'center' },
+  macroValue: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
+  macroLabel: {
+    fontSize: 9, color: Colors.textMuted, fontWeight: '600',
+    textTransform: 'uppercase', letterSpacing: 1,
+  },
+
+  sectionTitle: {
+    fontSize: 16, fontWeight: '700', color: Colors.text, letterSpacing: -0.3,
+  },
+
+  itemsCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  itemDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 12,
-    alignItems: 'flex-start',
   },
-  itemName: {
-    flex: 1,
-    fontSize: 18,
-    lineHeight: 23,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  itemWeight: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  itemOriginal: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 19,
-  },
-  itemCarbs: {
-    fontSize: 17,
-    color: Colors.carbs,
-    fontWeight: '700',
-  },
-  itemMacros: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 19,
-  },
-  itemNotes: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 19,
-  },
-  deleteButton: {
-    marginTop: 8,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: Colors.error + '60',
-    backgroundColor: Colors.error + '0C',
-    paddingVertical: 15,
+  itemLeft:   { flex: 1, gap: 2 },
+  itemName:   { fontSize: 14, fontWeight: '600', color: Colors.text },
+  itemMacros: { fontSize: 11, color: Colors.textMuted },
+  itemCarbs:  { fontSize: 15, fontWeight: '700', color: Colors.carbs },
+
+  deleteBtn: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.error + '50',
+    backgroundColor: Colors.error + '08',
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  deleteText: {
-    color: Colors.error,
-    fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.2,
-  },
-  emptyState: {
-    flex: 1,
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  emptyCopy: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
+  deleteText: { color: Colors.error, fontWeight: '700', fontSize: 14 },
 });

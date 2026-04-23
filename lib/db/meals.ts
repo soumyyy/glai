@@ -154,7 +154,33 @@ export function getMealItems(mealId: string): MealItemRow[] {
 
 export function deleteMeal(mealId: string): void {
   const db = getDb();
+  const meal = db.getFirstSync<{ synced_to_cloud: number; logged_on_date: string }>(
+    `SELECT synced_to_cloud, logged_on_date FROM meals WHERE id = ?`, [mealId],
+  );
+  if (meal?.synced_to_cloud) {
+    db.runSync(
+      `INSERT OR IGNORE INTO pending_deletes (meal_id, logged_on_date, deleted_at) VALUES (?, ?, ?)`,
+      [mealId, meal.logged_on_date, new Date().toISOString()],
+    );
+    console.log('[Delete] queued for cloud sync', { mealId });
+  }
   db.runSync(`DELETE FROM meals WHERE id = ?`, [mealId]);
+}
+
+export interface PendingDelete {
+  meal_id: string;
+  logged_on_date: string;
+  deleted_at: string;
+}
+
+export function getPendingDeletes(): PendingDelete[] {
+  const db = getDb();
+  return db.getAllSync<PendingDelete>(`SELECT * FROM pending_deletes ORDER BY deleted_at ASC`);
+}
+
+export function clearPendingDelete(mealId: string): void {
+  const db = getDb();
+  db.runSync(`DELETE FROM pending_deletes WHERE meal_id = ?`, [mealId]);
 }
 
 export function getUnsynced(): MealRow[] {

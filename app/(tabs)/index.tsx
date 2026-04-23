@@ -71,7 +71,7 @@ export default function HomeScreen() {
 
         {/* Hero carb number */}
         <View style={styles.heroSection}>
-          <Text style={styles.carbsLabel}>TODAY'S CARBS</Text>
+          <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
           <Text style={styles.carbsNumber}>
             {carbs}<Text style={styles.carbsUnit}>g</Text>
           </Text>

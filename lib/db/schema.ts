@@ -74,6 +74,12 @@ export function initSchema(): void {
       FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS pending_deletes (
+      meal_id TEXT PRIMARY KEY,
+      logged_on_date TEXT NOT NULL,
+      deleted_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS daily_summaries (
       date TEXT NOT NULL,
       user_id TEXT NOT NULL,
