@@ -9,6 +9,7 @@ import { Colors } from '../../constants/colors';
 import { formatLocalDate } from '../../lib/date';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
 import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries';
+import { useSyncStore } from '../../lib/store/syncStore';
 import { syncAndRestoreCloudMeals } from '../../lib/supabase/sync';
 
 function getGreeting(now: Date) {
@@ -32,15 +33,16 @@ export default function HomeScreen() {
   const isFocused = useIsFocused();
   const [summary, setSummary] = useState<DailySummaryRow | null>(null);
   const [meals, setMeals] = useState<MealRow[]>([]);
+  const lastSuccessfulSyncAt = useSyncStore((state) => state.lastSuccessfulSyncAt);
+
+  function refreshToday() {
+    const today = formatLocalDate(new Date());
+    setSummary(getSummaryForDate(today));
+    setMeals(getMealsForDate(today).reverse());
+  }
 
   useEffect(() => {
     if (!isFocused) return;
-    const today = formatLocalDate(new Date());
-    function refreshToday() {
-      setSummary(getSummaryForDate(today));
-      setMeals(getMealsForDate(today).reverse());
-    }
-
     refreshToday();
     syncAndRestoreCloudMeals()
       .then(refreshToday)
@@ -48,6 +50,11 @@ export default function HomeScreen() {
         console.warn('[Restore] home refresh failed', error);
       });
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused || !lastSuccessfulSyncAt) return;
+    refreshToday();
+  }, [isFocused, lastSuccessfulSyncAt]);
 
   const today = new Date();
   const carbs   = summary ? whole(summary.total_carbs_g)        : '—';

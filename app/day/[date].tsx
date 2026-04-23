@@ -4,7 +4,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
-import { MacroCard } from '../../components/MacroCard';
 import { MealListItem } from '../../components/MealListItem';
 import { Colors } from '../../constants/colors';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
@@ -12,101 +11,73 @@ import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries'
 
 function formatDateLine(date: string) {
   return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long',
   }).format(new Date(`${date}T12:00:00`));
 }
 
-function percentageText(summary: DailySummaryRow | null) {
-  if (!summary) return 'No macro distribution yet.';
-
-  const carbCalories = summary.total_carbs_g * 4;
-  const proteinCalories = summary.total_protein_g * 4;
-  const fatCalories = summary.total_fat_g * 9;
-  const total = carbCalories + proteinCalories + fatCalories;
-
-  if (total <= 0) return 'No macro distribution yet.';
-
-  const carbs = Math.round((carbCalories / total) * 100);
-  const protein = Math.round((proteinCalories / total) * 100);
-  const fat = Math.round((fatCalories / total) * 100);
-
-  return `Carbs ${carbs}% · Protein ${protein}% · Fat ${fat}%`;
-}
-
-function whole(value: number) {
-  return Math.round(value).toString();
-}
+function whole(n: number) { return Math.round(n).toString(); }
 
 export default function DayDetailScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const router    = useRouter();
+  const insets    = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { date } = useLocalSearchParams<{ date: string }>();
+  const { date }  = useLocalSearchParams<{ date: string }>();
   const [summary, setSummary] = useState<DailySummaryRow | null>(null);
-  const [meals, setMeals] = useState<MealRow[]>([]);
+  const [meals,   setMeals]   = useState<MealRow[]>([]);
 
   useEffect(() => {
     if (!isFocused || !date) return;
-
     setSummary(getSummaryForDate(date));
     setMeals(getMealsForDate(date));
   }, [date, isFocused]);
 
+  const macros = [
+    { label: 'Carbs',   value: summary ? `${whole(summary.total_carbs_g)}g`        : '—', color: Colors.carbs },
+    { label: 'Protein', value: summary ? `${whole(summary.total_protein_g)}g`      : '—', color: Colors.protein },
+    { label: 'Fat',     value: summary ? `${whole(summary.total_fat_g)}g`          : '—', color: Colors.fat },
+    { label: 'kcal',    value: summary ? whole(summary.total_calories_kcal)         : '—', color: Colors.calories },
+  ];
+
   return (
-    <View style={styles.screen}>
+    <View style={s.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <Atmosphere />
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 32 },
-        ]}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.overline}>DAY DETAIL</Text>
-          <Text style={styles.title}>{date ? formatDateLine(date) : 'Day detail'}</Text>
-          <Text style={styles.subtitle}>{percentageText(summary)}</Text>
-        </View>
+        {/* Back */}
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <Text style={s.backText}>← Back</Text>
+        </TouchableOpacity>
 
-        <View style={styles.grid}>
-          <MacroCard
-            label="Carbs"
-            value={summary ? `${whole(summary.total_carbs_g)}g` : '0g'}
-            color={Colors.carbs}
-          />
-          <MacroCard
-            label="Protein"
-            value={summary ? `${whole(summary.total_protein_g)}g` : '0g'}
-            color={Colors.protein}
-          />
-          <MacroCard
-            label="Fat"
-            value={summary ? `${whole(summary.total_fat_g)}g` : '0g'}
-            color={Colors.fat}
-          />
-          <MacroCard
-            label="Calories"
-            value={summary ? `${whole(summary.total_calories_kcal)}` : '0'}
-            color={Colors.calories}
-          />
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Meals</Text>
-          <Text style={styles.sectionCaption}>
-            {summary?.meal_count ?? 0} meal{summary?.meal_count === 1 ? '' : 's'} saved on this day.
+        {/* Title */}
+        <View style={s.titleBlock}>
+          <Text style={s.title}>{date ? formatDateLine(date) : 'Day detail'}</Text>
+          <Text style={s.subtitle}>
+            {summary?.meal_count ?? 0} meal{summary?.meal_count === 1 ? '' : 's'}
           </Text>
         </View>
 
+        {/* Macro strip */}
+        <View style={s.macroStrip}>
+          {macros.map((m, i) => (
+            <View key={m.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              {i > 0 && <View style={s.macroDiv} />}
+              <View style={s.macroItem}>
+                <Text style={[s.macroValue, { color: m.color }]}>{m.value}</Text>
+                <Text style={s.macroLabel}>{m.label}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Meals */}
+        <Text style={s.sectionTitle}>Meals</Text>
+
         {meals.length > 0 ? (
-          meals.map((meal) => (
+          meals.reverse().map((meal) => (
             <MealListItem
               key={meal.id}
               meal={meal}
@@ -114,11 +85,8 @@ export default function DayDetailScreen() {
             />
           ))
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No saved meals for this day.</Text>
-            <Text style={styles.emptyCopy}>
-              Once you log meals, this view becomes the detailed archive for that date.
-            </Text>
+          <View style={s.emptyCard}>
+            <Text style={s.emptyText}>No meals logged on this day.</Text>
           </View>
         )}
       </ScrollView>
@@ -126,84 +94,52 @@ export default function DayDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    gap: 8,
-  },
-  backButton: {
+const s = StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: 20, gap: 14 },
+
+  backBtn: {
     alignSelf: 'flex-start',
     backgroundColor: Colors.surface,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
-  backText: {
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  overline: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
+  backText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+
+  titleBlock: { gap: 3 },
   title: {
-    fontSize: 34,
-    lineHeight: 38,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1.2,
+    fontSize: 24, fontWeight: '700', color: Colors.text, letterSpacing: -0.7,
   },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  sectionHeader: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 23,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.8,
-  },
-  sectionCaption: {
-    marginTop: 4,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  emptyCard: {
+  subtitle: { fontSize: 13, color: Colors.textMuted },
+
+  macroStrip: {
     backgroundColor: Colors.surface,
-    borderRadius: 28,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 22,
-    gap: 10,
+    flexDirection: 'row',
+    paddingVertical: 12,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
+  macroItem:  { flex: 1, alignItems: 'center', gap: 3 },
+  macroDiv:   { width: 1, height: 24, backgroundColor: Colors.border, alignSelf: 'center' },
+  macroValue: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
+  macroLabel: {
+    fontSize: 9, color: Colors.textMuted, fontWeight: '600',
+    textTransform: 'uppercase', letterSpacing: 1,
   },
-  emptyCopy: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: Colors.textSecondary,
+
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
+
+  emptyCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    alignItems: 'center',
   },
+  emptyText: { fontSize: 14, color: Colors.textMuted },
 });

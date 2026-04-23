@@ -1,6 +1,6 @@
 import { Share } from 'react-native';
 import { getDb } from './db/schema';
-import { LOCAL_USER_ID } from '../constants/user';
+import { getActiveUserId } from './store/profileStore';
 
 interface ExportMealRow {
   created_at: string;
@@ -39,7 +39,7 @@ export async function exportMealsCSV(): Promise<void> {
   const db = getDb();
   const meals = db.getAllSync<ExportMealRow>(
     `SELECT * FROM meals WHERE user_id = ? ORDER BY logged_on_date ASC, created_at ASC`,
-    [LOCAL_USER_ID],
+    [getActiveUserId()],
   );
 
   if (meals.length === 0) {

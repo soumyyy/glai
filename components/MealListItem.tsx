@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: Colors.textMuted,
   },
-  name: { fontSize: 17, fontWeight: '600', color: Colors.text, lineHeight: 22 },
+  name: { fontSize: 14, fontWeight: '600', color: Colors.text, lineHeight: 20 },
   meta: {
     fontSize: 12,
     color: Colors.textSecondary,

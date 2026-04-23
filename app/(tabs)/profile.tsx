@@ -1,23 +1,40 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
-  ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Atmosphere } from '../../components/Atmosphere';
-import { Colors } from '../../constants/colors';
-import { LOCAL_USER } from '../../constants/user';
-import { getOpenAIConfig, hasSupabaseConfig } from '../../lib/config';
-import { exportMealsCSV } from '../../lib/export';
-import { getDb } from '../../lib/db/schema';
-import { syncAndRestoreCloudMeals } from '../../lib/supabase/sync';
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Atmosphere } from "../../components/Atmosphere";
+import { Colors } from "../../constants/colors";
+import { getOpenAIConfig, hasSupabaseConfig } from "../../lib/config";
+import { getDb } from "../../lib/db/schema";
+import { createProfile, deleteProfile, type UserRow } from "../../lib/db/users";
+import { exportMealsCSV } from "../../lib/export";
+import { useProfileStore } from "../../lib/store/profileStore";
 
 function isOpenAIConfigured() {
-  try { getOpenAIConfig(); return true; } catch { return false; }
+  try {
+    getOpenAIConfig();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function clearAllData() {
   const db = getDb();
-  db.execSync('DELETE FROM meal_items; DELETE FROM meals; DELETE FROM daily_summaries;');
+  db.execSync(
+    "DELETE FROM meal_items; DELETE FROM meals; DELETE FROM daily_summaries;",
+  );
 }
 
 export default function ProfileScreen() {
@@ -25,7 +42,77 @@ export default function ProfileScreen() {
   const openAIConfigured = isOpenAIConfigured();
   const supabaseConfigured = hasSupabaseConfig();
   const [exporting, setExporting] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+
+  const { activeUserId, profiles, setActiveUser, reloadProfiles } =
+    useProfileStore();
+  const activeProfile =
+    profiles.find((p) => p.id === activeUserId) ?? profiles[0];
+
+  // Sheet state
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newAge, setNewAge] = useState("");
+  const [newWeight, setNewWeight] = useState("");
+
+  function openSheet() {
+    setSheetOpen(true);
+    setAddingNew(false);
+  }
+  function closeSheet() {
+    setSheetOpen(false);
+    setAddingNew(false);
+    setNewName("");
+    setNewAge("");
+    setNewWeight("");
+  }
+
+  function handleSelectProfile(id: string) {
+    setActiveUser(id);
+    closeSheet();
+  }
+
+  function handleAddProfile() {
+    const name = newName.trim();
+    if (!name) {
+      Alert.alert("Name required");
+      return;
+    }
+    const profile = createProfile(
+      name,
+      newAge ? Number(newAge) : null,
+      newWeight ? Number(newWeight) : null,
+    );
+    reloadProfiles();
+    setActiveUser(profile.id);
+    closeSheet();
+  }
+
+  function handleDeleteProfile(profile: UserRow) {
+    if (profiles.length <= 1) {
+      Alert.alert("Cannot delete", "You need at least one profile.");
+      return;
+    }
+    Alert.alert(
+      `Delete "${profile.name}"?`,
+      "All meals logged under this profile will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteProfile(profile.id);
+            if (activeUserId === profile.id) {
+              const remaining = profiles.filter((p) => p.id !== profile.id);
+              setActiveUser(remaining[0].id);
+            }
+            reloadProfiles();
+          },
+        },
+      ],
+    );
+  }
 
   async function handleExport() {
     if (exporting) return;
@@ -33,8 +120,10 @@ export default function ProfileScreen() {
     try {
       await exportMealsCSV();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Export failed.';
-      Alert.alert('Export failed', msg);
+      Alert.alert(
+        "Export failed",
+        err instanceof Error ? err.message : "Please try again.",
+      );
     } finally {
       setExporting(false);
     }
@@ -42,437 +131,585 @@ export default function ProfileScreen() {
 
   function handleClearAll() {
     Alert.alert(
-      'Clear all data?',
-      'This permanently deletes every meal, item, and daily summary from this device. This cannot be undone.',
+      "Clear all data?",
+      "Permanently deletes every meal for this profile.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete everything',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Are you absolutely sure?',
-              'All your logged meals will be gone. Your Supabase cloud data is not affected.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Yes, clear everything',
-                  style: 'destructive',
-                  onPress: clearAllData,
-                },
-              ],
-            );
-          },
+          text: "Delete everything",
+          style: "destructive",
+          onPress: () =>
+            Alert.alert("Are you sure?", "This cannot be undone.", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Yes, clear everything",
+                style: "destructive",
+                onPress: clearAllData,
+              },
+            ]),
         },
       ],
     );
   }
 
-  async function handleRestore() {
-    if (restoring) return;
-    setRestoring(true);
-    try {
-      await syncAndRestoreCloudMeals();
-      Alert.alert('Cloud restore complete', 'Meals saved in Supabase are now available on this device.');
-    } catch (error) {
-      Alert.alert(
-        'Cloud restore failed',
-        'Could not restore from cloud right now. Check your connection and try again.',
-      );
-      console.warn('[Restore] manual restore failed', error);
-    } finally {
-      setRestoring(false);
-    }
-  }
-
-  const initial = LOCAL_USER.name.slice(0, 1).toUpperCase();
+  const connections = [
+    { label: 'Vision', status: openAIConfigured ? 'Connected' : 'Not configured', ok: openAIConfigured, neutral: false },
+    { label: 'Database', status: supabaseConfigured ? 'Connected' : 'Local only', ok: supabaseConfigured, neutral: !supabaseConfigured },
+  ];
 
   return (
-    <View style={styles.screen}>
+    <View style={s.screen}>
       <Atmosphere />
-
       <ScrollView
         contentContainerStyle={[
-          styles.content,
+          s.content,
           { paddingTop: insets.top + 22, paddingBottom: insets.bottom + 132 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.overline}>PROFILE</Text>
-          <Text style={styles.title}>Your health record</Text>
-        </View>
+        <Text style={s.title}>Profile</Text>
 
-        {/* Identity card */}
-        <View style={styles.identityCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-          <View style={styles.identityBody}>
-            <Text style={styles.identityName}>{LOCAL_USER.name}</Text>
-            <Text style={styles.identityMeta}>Local profile · single-user v1</Text>
-            <View style={styles.identityStats}>
-              <View style={styles.identityStat}>
-                <Text style={styles.identityStatValue}>{LOCAL_USER.age}</Text>
-                <Text style={styles.identityStatLabel}>Age</Text>
-              </View>
-              <View style={styles.identityStatDivider} />
-              <View style={styles.identityStat}>
-                <Text style={styles.identityStatValue}>{LOCAL_USER.weight_kg}kg</Text>
-                <Text style={styles.identityStatLabel}>Weight</Text>
-              </View>
-              <View style={styles.identityStatDivider} />
-              <View style={styles.identityStat}>
-                <Text style={styles.identityStatValue}>Metric</Text>
-                <Text style={styles.identityStatLabel}>Units</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Backend status */}
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Connections</Text>
-          <View style={styles.statusItem}>
-            <View style={[styles.statusDot, openAIConfigured ? styles.dotGreen : styles.dotAmber]} />
-            <View style={styles.statusText}>
-              <Text style={styles.statusName}>OpenAI meal analysis</Text>
-              <Text style={styles.statusDetail}>{openAIConfigured ? 'Connected · GPT-4o Vision' : 'Missing API key'}</Text>
-            </View>
-          </View>
-          <View style={styles.statusDivider} />
-          <View style={styles.statusItem}>
-            <View style={[styles.statusDot, supabaseConfigured ? styles.dotGreen : styles.dotGrey]} />
-            <View style={styles.statusText}>
-              <Text style={styles.statusName}>Supabase cloud sync</Text>
-              <Text style={styles.statusDetail}>{supabaseConfigured ? 'Connected · syncing in background' : 'Local-only mode'}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Export */}
+        {/* Identity — tap to switch */}
         <TouchableOpacity
-          style={styles.exportCard}
-          onPress={handleExport}
-          disabled={exporting}
-          activeOpacity={0.78}
+          style={s.card}
+          onPress={openSheet}
+          activeOpacity={0.75}
         >
-          <View style={styles.exportLeft}>
-            <View style={styles.exportIcon}>
-              <View style={styles.exportIconArrow} />
-            </View>
-            <View>
-              <Text style={styles.exportTitle}>Export to CSV</Text>
-              <Text style={styles.exportSubtitle}>All meals · all macros · carb ranges</Text>
-            </View>
-          </View>
-          {exporting ? (
-            <ActivityIndicator color={Colors.primary} />
-          ) : (
-            <View style={styles.exportChevron}>
-              <View style={styles.exportChevronLine1} />
-              <View style={styles.exportChevronLine2} />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.exportCard}
-          onPress={handleRestore}
-          disabled={restoring || !supabaseConfigured}
-          activeOpacity={0.78}
-        >
-          <View style={styles.exportLeft}>
-            <View style={styles.exportIcon}>
-              <View style={styles.exportIconArrow} />
-            </View>
-            <View>
-              <Text style={styles.exportTitle}>Restore from cloud</Text>
-              <Text style={styles.exportSubtitle}>
-                Pull meals from Supabase after reinstall
+          <View style={s.identityRow}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>
+                {(activeProfile?.name ?? "?").slice(0, 1).toUpperCase()}
               </Text>
             </View>
-          </View>
-          {restoring ? (
-            <ActivityIndicator color={Colors.primary} />
-          ) : (
-            <View style={styles.exportChevron}>
-              <View style={styles.exportChevronLine1} />
-              <View style={styles.exportChevronLine2} />
+            <View style={s.identityText}>
+              <Text style={s.identityName}>
+                {activeProfile?.name ?? "Unknown"}
+              </Text>
+              <Text style={s.identityMeta}>
+                {profiles.length > 1
+                  ? `${profiles.length} profiles · tap to switch`
+                  : "Tap to manage profiles"}
+              </Text>
             </View>
-          )}
+            <Text style={s.chevron}>›</Text>
+          </View>
+
+          <View style={s.cardDivider} />
+
+          <View style={s.statsRow}>
+            {[
+              {
+                label: "Age",
+                value: activeProfile?.age ? String(activeProfile.age) : "—",
+              },
+              {
+                label: "Weight",
+                value: activeProfile?.weight_kg
+                  ? `${activeProfile.weight_kg} kg`
+                  : "—",
+              },
+            ].map((stat, i) => (
+              <View
+                key={stat.label}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+              >
+                {i > 0 && <View style={s.statDiv} />}
+                <View style={s.statItem}>
+                  <Text style={s.statValue}>{stat.value}</Text>
+                  <Text style={s.statLabel}>{stat.label}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </TouchableOpacity>
 
-        {/* Danger zone */}
-        <View style={styles.dangerPanel}>
-          <Text style={styles.dangerTitle}>Danger zone</Text>
-          <Text style={styles.dangerCopy}>
-            Clears all local meal data from this device. Your cloud data in Supabase is not affected.
-          </Text>
-          <TouchableOpacity style={styles.dangerButton} onPress={handleClearAll} activeOpacity={0.78}>
-            <Text style={styles.dangerButtonText}>Clear all local data</Text>
+        {/* Connections */}
+        <Text style={s.sectionTitle}>Connections</Text>
+        <View style={s.card}>
+          {connections.map((c, i) => (
+            <View key={c.label}>
+              {i > 0 && <View style={s.cardDivider} />}
+              <View style={s.connectionRow}>
+                <View style={[s.dot, c.ok ? s.dotGreen : c.neutral ? s.dotGrey : s.dotAmber]} />
+                <Text style={s.connectionName}>{c.label}</Text>
+                <Text style={s.connectionStatus}>{c.status}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Data actions */}
+        <Text style={s.sectionTitle}>Data</Text>
+        <View style={s.card}>
+          <TouchableOpacity
+            style={s.actionRow}
+            onPress={handleExport}
+            disabled={exporting}
+            activeOpacity={0.7}
+          >
+            <Text style={s.actionLabel}>Export to CSV</Text>
+            {exporting ? (
+              <ActivityIndicator color={Colors.primary} size="small" />
+            ) : (
+              <Text style={s.actionChevron}>›</Text>
+            )}
+          </TouchableOpacity>
+          <View style={s.cardDivider} />
+          <TouchableOpacity
+            style={s.actionRow}
+            onPress={handleClearAll}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.actionLabel, s.actionDestructive]}>
+              Clear all local data
+            </Text>
+            <Text style={[s.actionChevron, s.actionDestructive]}>›</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Profile switcher sheet */}
+      <Modal
+        visible={sheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={closeSheet}
+      >
+        <TouchableOpacity
+          style={s.backdrop}
+          activeOpacity={1}
+          onPress={closeSheet}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.sheet}
+        >
+          <View style={s.sheetHandle} />
+
+          {!addingNew ? (
+            <>
+              <View style={s.sheetHeader}>
+                <Text style={s.sheetTitle}>Profiles</Text>
+                <Text style={s.sheetSubtitle}>
+                  {profiles.length}{" "}
+                  {profiles.length === 1 ? "member" : "members"}
+                </Text>
+              </View>
+
+              <View style={s.profileList}>
+                {profiles.map((p, i) => {
+                  const isActive = p.id === activeUserId;
+                  const initial = p.name.slice(0, 1).toUpperCase();
+                  return (
+                    <View key={p.id}>
+                      {i > 0 && <View style={s.profileDivider} />}
+                      <TouchableOpacity
+                        style={[s.profileRow, isActive && s.profileRowActive]}
+                        onPress={() => handleSelectProfile(p.id)}
+                        activeOpacity={0.6}
+                      >
+                        <View
+                          style={[
+                            s.profileAvatar,
+                            isActive && s.profileAvatarActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.profileAvatarText,
+                              isActive && s.profileAvatarTextActive,
+                            ]}
+                          >
+                            {initial}
+                          </Text>
+                        </View>
+                        <View style={s.profileInfo}>
+                          <Text
+                            style={[
+                              s.profileName,
+                              isActive && s.profileNameActive,
+                            ]}
+                          >
+                            {p.name}
+                          </Text>
+                          <Text style={s.profileMeta}>
+                            {[
+                              p.age ? `Age ${p.age}` : null,
+                              p.weight_kg ? `${p.weight_kg} kg` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "No details set"}
+                          </Text>
+                        </View>
+                        {isActive ? (
+                          <View style={s.activeCheck}>
+                            <Text style={s.activeCheckMark}>✓</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={s.deleteBtn}
+                            hitSlop={{
+                              top: 12,
+                              bottom: 12,
+                              left: 12,
+                              right: 12,
+                            }}
+                            onPress={() => handleDeleteProfile(p)}
+                          >
+                            <Text style={s.deleteBtnText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={s.addProfileBtn}
+                onPress={() => setAddingNew(true)}
+                activeOpacity={0.75}
+              >
+                <Text style={s.addProfileIcon}>+</Text>
+                <Text style={s.addProfileText}>Add profile</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={s.sheetHeader}>
+                <Text style={s.sheetTitle}>New profile</Text>
+                <Text style={s.sheetSubtitle}>Fill in what you know</Text>
+              </View>
+
+              <View style={s.formGroup}>
+                <Text style={s.formLabel}>Name</Text>
+                <TextInput
+                  style={s.sheetInput}
+                  placeholder="e.g. Sarah"
+                  placeholderTextColor={Colors.textMuted}
+                  value={newName}
+                  onChangeText={setNewName}
+                  autoFocus
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={s.formRow}>
+                <View style={[s.formGroup, { flex: 1 }]}>
+                  <Text style={s.formLabel}>Age</Text>
+                  <TextInput
+                    style={s.sheetInput}
+                    placeholder="—"
+                    placeholderTextColor={Colors.textMuted}
+                    value={newAge}
+                    onChangeText={setNewAge}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[s.formGroup, { flex: 1 }]}>
+                  <Text style={s.formLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={s.sheetInput}
+                    placeholder="—"
+                    placeholderTextColor={Colors.textMuted}
+                    value={newWeight}
+                    onChangeText={setNewWeight}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={s.sheetActions}>
+                <TouchableOpacity
+                  style={s.sheetCancel}
+                  onPress={() => setAddingNew(false)}
+                >
+                  <Text style={s.sheetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.sheetSave}
+                  onPress={handleAddProfile}
+                >
+                  <Text style={s.sheetSaveText}>Create profile</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 18,
-  },
-  header: {
-    gap: 6,
-  },
-  overline: {
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: Colors.textMuted,
-    fontWeight: '700',
-  },
-  title: {
-    fontSize: 38,
-    lineHeight: 42,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1.4,
-  },
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: 20, gap: 12 },
 
-  // Identity card
-  identityCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    gap: 18,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
-    shadowRadius: 20,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 26,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  identityBody: {
-    gap: 10,
-  },
-  identityName: {
-    fontSize: 26,
-    fontWeight: '700',
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
     color: Colors.text,
     letterSpacing: -0.8,
+    marginBottom: 2,
   },
-  identityMeta: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  identityStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginTop: 4,
   },
-  identityStat: {
-    flex: 1,
-    gap: 2,
+
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
   },
-  identityStatDivider: {
-    width: 1,
-    height: 28,
+  cardDivider: {
+    height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
-    marginHorizontal: 12,
   },
-  identityStatValue: {
-    fontSize: 17,
-    fontWeight: '700',
+
+  identityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 16,
+  },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 19, fontWeight: "700", color: "#fff" },
+  identityText: { flex: 1, gap: 2 },
+  identityName: {
+    fontSize: 16,
+    fontWeight: "700",
     color: Colors.text,
     letterSpacing: -0.3,
   },
-  identityStatLabel: {
-    fontSize: 10,
+  identityMeta: { fontSize: 12, color: Colors.textMuted },
+  chevron: { fontSize: 20, color: Colors.textMuted, lineHeight: 22 },
+
+  statsRow: { flexDirection: "row", paddingVertical: 14 },
+  statItem: { flex: 1, alignItems: "center", gap: 3 },
+  statDiv: {
+    width: 1,
+    height: 24,
+    backgroundColor: Colors.border,
+    alignSelf: "center",
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  statLabel: {
+    fontSize: 9,
     color: Colors.textMuted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
-  // Connections panel
-  panel: {
-    backgroundColor: Colors.surface,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    gap: 16,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
+  connectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
   },
-  panelTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.4,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
-  },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   dotGreen: { backgroundColor: Colors.success },
   dotAmber: { backgroundColor: Colors.warning },
   dotGrey: { backgroundColor: Colors.textMuted },
-  statusText: { flex: 1, gap: 2 },
-  statusName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  statusDetail: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  statusDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
+  connectionName: { flex: 1, fontSize: 14, fontWeight: "600", color: Colors.text },
+  connectionStatus: { fontSize: 13, color: Colors.textMuted },
 
-  // Export card
-  exportCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  actionLabel: { fontSize: 14, fontWeight: "600", color: Colors.text },
+  actionChevron: { fontSize: 20, color: Colors.textMuted, lineHeight: 22 },
+  actionDestructive: { color: Colors.error },
+
+  // Sheet
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
+  sheet: {
+    backgroundColor: Colors.surfaceStrong,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
     gap: 16,
     shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
   },
-  exportLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
+  sheetHandle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 6,
   },
-  exportIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: Colors.primary + '14',
+  sheetHeader: { gap: 2, marginBottom: 2 },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.text,
+    letterSpacing: -0.5,
+  },
+  sheetSubtitle: { fontSize: 13, color: Colors.textMuted, fontWeight: "500" },
+
+  profileList: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Colors.primary + '30',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: Colors.border,
+    overflow: "hidden",
   },
-  exportIconArrow: {
-    width: 16,
-    height: 16,
-    borderTopWidth: 2.5,
-    borderRightWidth: 2.5,
+  profileDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginLeft: 72,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+  },
+  profileRowActive: { backgroundColor: "rgba(30, 108, 98, 0.05)" },
+  profileAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileAvatarActive: {
+    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
-    transform: [{ rotate: '45deg' }],
-    marginLeft: -4,
   },
-  exportTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+  profileAvatarText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.textMuted,
+  },
+  profileAvatarTextActive: { color: "#fff" },
+  profileInfo: { flex: 1, gap: 3 },
+  profileName: {
+    fontSize: 15,
+    fontWeight: "600",
     color: Colors.text,
     letterSpacing: -0.2,
   },
-  exportSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
+  profileNameActive: { color: Colors.primary },
+  profileMeta: { fontSize: 12, color: Colors.textMuted },
+  activeCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  exportChevron: {
-    width: 10,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  activeCheckMark: { fontSize: 12, color: "#fff", fontWeight: "700" },
+  deleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  exportChevronLine1: {
-    position: 'absolute',
-    width: 9,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: Colors.textMuted,
-    transform: [{ rotate: '45deg' }, { translateY: -3 }],
-  },
-  exportChevronLine2: {
-    position: 'absolute',
-    width: 9,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: Colors.textMuted,
-    transform: [{ rotate: '-45deg' }, { translateY: 3 }],
-  },
+  deleteBtnText: { fontSize: 11, color: Colors.textMuted, fontWeight: "600" },
 
-  // Danger zone
-  dangerPanel: {
-    backgroundColor: Colors.error + '08',
-    borderRadius: 28,
+  addProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 16,
+    marginBottom: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.error + '25',
-    padding: 20,
-    gap: 12,
+    borderColor: Colors.border,
+    borderStyle: "dashed",
+    backgroundColor: Colors.surface,
   },
-  dangerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.error,
-    letterSpacing: -0.2,
-  },
-  dangerCopy: {
-    fontSize: 13,
+  addProfileIcon: {
+    fontSize: 18,
+    color: Colors.primary,
+    fontWeight: "300",
     lineHeight: 20,
+  },
+  addProfileText: { fontSize: 14, fontWeight: "600", color: Colors.primary },
+
+  formGroup: { gap: 7 },
+  formLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginLeft: 2,
+  },
+  formRow: { flexDirection: "row", gap: 12 },
+  sheetInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: Colors.text,
+    backgroundColor: Colors.background,
+  },
+  sheetActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  sheetCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+  },
+  sheetCancelText: {
     color: Colors.textSecondary,
+    fontWeight: "600",
+    fontSize: 14,
   },
-  dangerButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: Colors.error + '50',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: Colors.error + '0C',
+  sheetSave: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
   },
-  dangerButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.error,
+  sheetSaveText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+    letterSpacing: -0.2,
   },
 });

@@ -11,6 +11,7 @@ import {
   type MealItemRow,
   type MealRow,
 } from '../db/meals';
+import { useSyncStore } from '../store/syncStore';
 import { getSupabaseClient } from './client';
 
 let cloudCycleInFlight: Promise<void> | null = null;
@@ -245,12 +246,18 @@ export async function syncAndRestoreCloudMeals(): Promise<void> {
   }
 
   cloudCycleInFlight = (async () => {
+    useSyncStore.getState().setSyncing();
     await syncPendingMeals();
+    useSyncStore.getState().setRestoring();
     await restoreCloudMeals();
+    useSyncStore.getState().setCompleted();
   })();
 
   try {
     await cloudCycleInFlight;
+  } catch (error) {
+    useSyncStore.getState().setError(describeError(error));
+    throw error;
   } finally {
     cloudCycleInFlight = null;
   }

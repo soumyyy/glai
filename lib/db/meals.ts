@@ -1,8 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { getDb } from './schema';
 import type { NutritionItem } from '../ai/types';
-import { LOCAL_USER_ID } from '../../constants/user';
 import { formatLocalDate } from '../date';
+import { getActiveUserId } from '../store/profileStore';
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type PortionSize = 'quarter' | 'half' | 'three-quarters' | 'full' | 'custom';
@@ -86,7 +86,7 @@ export function saveMeal(params: SaveMealParams): SaveMealResult {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
         mealId,
-        LOCAL_USER_ID,
+        getActiveUserId(),
         createdAtIso,
         loggedOnDate,
         params.mealType,
@@ -138,7 +138,7 @@ export function getMealsForDate(date: string): MealRow[] {
   const db = getDb();
   return db.getAllSync<MealRow>(
     `SELECT * FROM meals WHERE user_id = ? AND logged_on_date = ? ORDER BY created_at ASC`,
-    [LOCAL_USER_ID, date],
+    [getActiveUserId(), date],
   );
 }
 
@@ -274,7 +274,7 @@ export function getUnsynced(): MealRow[] {
   const db = getDb();
   return db.getAllSync<MealRow>(
     `SELECT * FROM meals WHERE user_id = ? AND synced_to_cloud = 0 ORDER BY created_at ASC`,
-    [LOCAL_USER_ID],
+    [getActiveUserId()],
   );
 }
 

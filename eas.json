@@ -5,20 +5,32 @@
   },
   "build": {
     "development": {
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_IMAGE_DISABLE_LIBDAV1D": "1"
+      },
       "ios": {
         "simulator": true
       }
     },
     "preview": {
+      "environment": "preview",
       "distribution": "internal",
+      "env": {
+        "EXPO_IMAGE_DISABLE_LIBDAV1D": "1"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }
     },
     "production": {
+      "environment": "production",
       "autoIncrement": true,
+      "env": {
+        "EXPO_IMAGE_DISABLE_LIBDAV1D": "1"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }

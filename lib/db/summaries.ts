@@ -1,5 +1,5 @@
 import { getDb } from './schema';
-import { LOCAL_USER_ID } from '../../constants/user';
+import { getActiveUserId } from '../store/profileStore';
 
 export interface DailySummaryRow {
   date: string;
@@ -28,7 +28,7 @@ export function upsertDailySummary(date: string): void {
        total_fat_g = excluded.total_fat_g,
        total_calories_kcal = excluded.total_calories_kcal,
        meal_count = excluded.meal_count`,
-    [date, LOCAL_USER_ID, LOCAL_USER_ID, date],
+    [date, getActiveUserId(), getActiveUserId(), date],
   );
 }
 
@@ -36,7 +36,7 @@ export function getSummaryForDate(date: string): DailySummaryRow | null {
   const db = getDb();
   return db.getFirstSync<DailySummaryRow>(
     `SELECT * FROM daily_summaries WHERE date = ? AND user_id = ?`,
-    [date, LOCAL_USER_ID],
+    [date, getActiveUserId()],
   );
 }
 
@@ -67,6 +67,6 @@ export function getSummariesForRange(startDate: string, endDate: string): DailyS
   const db = getDb();
   return db.getAllSync<DailySummaryRow>(
     `SELECT * FROM daily_summaries WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date DESC`,
-    [LOCAL_USER_ID, startDate, endDate],
+    [getActiveUserId(), startDate, endDate],
   );
 }
