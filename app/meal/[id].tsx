@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,8 @@ import { Atmosphere } from '../../components/Atmosphere';
 import { ConfidenceBadge } from '../../components/ConfidenceBadge';
 import { MacroCard } from '../../components/MacroCard';
 import { Colors } from '../../constants/colors';
-import { getMealById, getMealItems, type MealItemRow, type MealRow } from '../../lib/db/meals';
+import { deleteMeal, getMealById, getMealItems, type MealItemRow, type MealRow } from '../../lib/db/meals';
+import { upsertDailySummary } from '../../lib/db/summaries';
 
 function formatMealTime(dateString: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -37,6 +38,26 @@ export default function MealDetailScreen() {
     setMeal(getMealById(id));
     setItems(getMealItems(id));
   }, [id, isFocused]);
+
+  function handleDelete() {
+    if (!meal) return;
+    Alert.alert(
+      'Delete meal',
+      `Remove "${meal.meal_name}" permanently? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteMeal(meal.id);
+            upsertDailySummary(meal.logged_on_date);
+            router.back();
+          },
+        },
+      ],
+    );
+  }
 
   if (!meal) {
     return (
@@ -158,6 +179,10 @@ export default function MealDetailScreen() {
             {item.ai_notes ? <Text style={styles.itemNotes}>{item.ai_notes}</Text> : null}
           </View>
         ))}
+
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.78}>
+          <Text style={styles.deleteText}>Delete meal</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -364,6 +389,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     lineHeight: 19,
+  },
+  deleteButton: {
+    marginTop: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: Colors.error + '60',
+    backgroundColor: Colors.error + '0C',
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  deleteText: {
+    color: Colors.error,
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
   emptyState: {
     flex: 1,

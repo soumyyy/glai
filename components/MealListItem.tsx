@@ -12,7 +12,8 @@ export function MealListItem({ meal, onPress }: MealListItemProps) {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const carbMid = ((meal.total_carbs_low_g + meal.total_carbs_high_g) / 2).toFixed(0);
+  const carbLow = Math.round(meal.total_carbs_low_g);
+  const carbHigh = Math.round(meal.total_carbs_high_g);
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
@@ -25,7 +26,7 @@ export function MealListItem({ meal, onPress }: MealListItemProps) {
         <Text style={styles.name}>{meal.meal_name}</Text>
       </View>
       <View style={styles.right}>
-        <Text style={styles.carbs}>{carbMid}g</Text>
+        <Text style={styles.carbs}>{carbLow}–{carbHigh}g</Text>
         <Text style={styles.carbsLabel}>carbs</Text>
       </View>
     </TouchableOpacity>

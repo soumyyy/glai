@@ -78,7 +78,7 @@ export default function SaveConfirmationScreen() {
       upsertDailySummary(savedMeal.loggedOnDate);
       syncPendingMeals().catch((err) => console.warn('[Save] sync:failed', err));
       reset();
-      router.replace('/');
+      router.dismissAll();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Please try again.';
       Alert.alert('Could not save meal', message);
