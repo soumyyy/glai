@@ -8,6 +8,15 @@ import { Colors } from '../../constants/colors';
 import { deleteMeal, getMealById, getMealItems, type MealItemRow, type MealRow } from '../../lib/db/meals';
 import { upsertDailySummary } from '../../lib/db/summaries';
 import { syncPendingMeals } from '../../lib/supabase/sync';
+import { useProfileStore } from '../../lib/store/profileStore';
+
+function roundHalf(n: number): number {
+  return Math.round(n * 2) / 2;
+}
+
+function fmtDose(n: number): string {
+  return n % 1 === 0 ? `${n}u` : `${n}u`;
+}
 
 function formatMealTime(dateString: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -25,6 +34,10 @@ export default function MealDetailScreen() {
   const { id }    = useLocalSearchParams<{ id: string }>();
   const [meal, setMeal]   = useState<MealRow | null>(null);
   const [items, setItems] = useState<MealItemRow[]>([]);
+
+  const { activeUserId, profiles } = useProfileStore();
+  const activeProfile = profiles.find(p => p.id === activeUserId);
+  const icr = activeProfile?.insulin_to_carb_ratio ?? null;
 
   useEffect(() => {
     if (!isFocused || !id) return;
@@ -116,6 +129,25 @@ export default function MealDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* Fiasp suggestion */}
+        {icr && icr >= 5 && icr <= 50 && (() => {
+          const low  = roundHalf(meal.total_carbs_low_g  / icr);
+          const high = roundHalf(meal.total_carbs_high_g / icr);
+          const display = low === high ? fmtDose(low) : `${fmtDose(low)}–${fmtDose(high)}`;
+          return (
+            <View style={s.insulinCard}>
+              <View style={s.insulinRow}>
+                <Text style={s.insulinLabel}>Fiasp</Text>
+                <Text style={s.insulinDose}>{display}</Text>
+              </View>
+              <View style={s.insulinDivider} />
+              <Text style={s.insulinDisclaimer}>
+                Suggested dose only — always confirm before administering insulin.
+              </Text>
+            </View>
+          );
+        })()}
 
         {/* Items */}
         <Text style={s.sectionTitle}>Items</Text>
@@ -233,6 +265,23 @@ const s = StyleSheet.create({
   itemName:   { fontSize: 14, fontWeight: '600', color: Colors.text },
   itemMacros: { fontSize: 11, color: Colors.textMuted },
   itemCarbs:  { fontSize: 15, fontWeight: '700', color: Colors.carbs },
+
+  insulinCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  insulinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  insulinLabel: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  insulinDose: { fontSize: 22, fontWeight: '700', color: Colors.primary, letterSpacing: -0.5 },
+  insulinDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border },
+  insulinDisclaimer: { fontSize: 11, color: Colors.textMuted, lineHeight: 16 },
 
   deleteBtn: {
     marginTop: 6,

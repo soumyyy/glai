@@ -17,7 +17,7 @@ import { Atmosphere } from "../../components/Atmosphere";
 import { Colors } from "../../constants/colors";
 import { getOpenAIConfig, hasSupabaseConfig } from "../../lib/config";
 import { getDb } from "../../lib/db/schema";
-import { createProfile, deleteProfile, type UserRow } from "../../lib/db/users";
+import { createProfile, deleteProfile, updateProfile, type UserRow } from "../../lib/db/users";
 import { exportMealsCSV } from "../../lib/export";
 import { useProfileStore } from "../../lib/store/profileStore";
 
@@ -49,22 +49,34 @@ export default function ProfileScreen() {
     profiles.find((p) => p.id === activeUserId) ?? profiles[0];
 
   // Sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [addingNew, setAddingNew] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newAge, setNewAge] = useState("");
-  const [newWeight, setNewWeight] = useState("");
+  const [sheetOpen,     setSheetOpen]     = useState(false);
+  const [addingNew,     setAddingNew]     = useState(false);
+  const [editingProfile, setEditingProfile] = useState<UserRow | null>(null);
 
-  function openSheet() {
-    setSheetOpen(true);
-    setAddingNew(false);
-  }
+  // Add form
+  const [newName,   setNewName]   = useState('');
+  const [newAge,    setNewAge]    = useState('');
+  const [newWeight, setNewWeight] = useState('');
+  const [newIcr,    setNewIcr]    = useState('');
+
+  // Edit form
+  const [editName,   setEditName]   = useState('');
+  const [editAge,    setEditAge]    = useState('');
+  const [editWeight, setEditWeight] = useState('');
+  const [editIcr,    setEditIcr]    = useState('');
+
+  function openSheet() { setSheetOpen(true); setAddingNew(false); setEditingProfile(null); }
   function closeSheet() {
-    setSheetOpen(false);
-    setAddingNew(false);
-    setNewName("");
-    setNewAge("");
-    setNewWeight("");
+    setSheetOpen(false); setAddingNew(false); setEditingProfile(null);
+    setNewName(''); setNewAge(''); setNewWeight(''); setNewIcr('');
+  }
+
+  function openEdit(profile: UserRow) {
+    setEditingProfile(profile);
+    setEditName(profile.name);
+    setEditAge(profile.age ? String(profile.age) : '');
+    setEditWeight(profile.weight_kg ? String(profile.weight_kg) : '');
+    setEditIcr(profile.insulin_to_carb_ratio ? String(profile.insulin_to_carb_ratio) : '');
   }
 
   function handleSelectProfile(id: string) {
@@ -74,18 +86,30 @@ export default function ProfileScreen() {
 
   function handleAddProfile() {
     const name = newName.trim();
-    if (!name) {
-      Alert.alert("Name required");
-      return;
-    }
+    if (!name) { Alert.alert('Name required'); return; }
     const profile = createProfile(
       name,
       newAge ? Number(newAge) : null,
       newWeight ? Number(newWeight) : null,
+      newIcr ? Number(newIcr) : null,
     );
     reloadProfiles();
     setActiveUser(profile.id);
     closeSheet();
+  }
+
+  function handleSaveEdit() {
+    if (!editingProfile) return;
+    const name = editName.trim();
+    if (!name) { Alert.alert('Name required'); return; }
+    updateProfile(editingProfile.id, {
+      name,
+      age: editAge ? Number(editAge) : null,
+      weight_kg: editWeight ? Number(editWeight) : null,
+      insulin_to_carb_ratio: editIcr ? Number(editIcr) : null,
+    });
+    reloadProfiles();
+    setEditingProfile(null);
   }
 
   function handleDeleteProfile(profile: UserRow) {
@@ -286,13 +310,69 @@ export default function ProfileScreen() {
         >
           <View style={s.sheetHandle} />
 
-          {!addingNew ? (
+          {editingProfile ? (
+            <>
+              <View style={s.sheetHeader}>
+                <Text style={s.sheetTitle}>Edit profile</Text>
+                <Text style={s.sheetSubtitle}>{editingProfile.name}</Text>
+              </View>
+
+              <View style={s.formGroup}>
+                <Text style={s.formLabel}>Name</Text>
+                <TextInput
+                  style={s.sheetInput} placeholder="Name"
+                  placeholderTextColor={Colors.textMuted}
+                  value={editName} onChangeText={setEditName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={s.formRow}>
+                <View style={[s.formGroup, { flex: 1 }]}>
+                  <Text style={s.formLabel}>Age</Text>
+                  <TextInput
+                    style={s.sheetInput} placeholder="—"
+                    placeholderTextColor={Colors.textMuted}
+                    value={editAge} onChangeText={setEditAge}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[s.formGroup, { flex: 1 }]}>
+                  <Text style={s.formLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={s.sheetInput} placeholder="—"
+                    placeholderTextColor={Colors.textMuted}
+                    value={editWeight} onChangeText={setEditWeight}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={s.formGroup}>
+                <Text style={s.formLabel}>Insulin-to-carb ratio (ICR)</Text>
+                <TextInput
+                  style={s.sheetInput} placeholder="e.g. 16"
+                  placeholderTextColor={Colors.textMuted}
+                  value={editIcr} onChangeText={setEditIcr}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={s.sheetActions}>
+                <TouchableOpacity style={s.sheetCancel} onPress={() => setEditingProfile(null)}>
+                  <Text style={s.sheetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.sheetSave} onPress={handleSaveEdit}>
+                  <Text style={s.sheetSaveText}>Save changes</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : !addingNew ? (
             <>
               <View style={s.sheetHeader}>
                 <Text style={s.sheetTitle}>Profiles</Text>
                 <Text style={s.sheetSubtitle}>
-                  {profiles.length}{" "}
-                  {profiles.length === 1 ? "member" : "members"}
+                  {profiles.length} {profiles.length === 1 ? 'member' : 'members'}
                 </Text>
               </View>
 
@@ -305,40 +385,19 @@ export default function ProfileScreen() {
                       {i > 0 && <View style={s.profileDivider} />}
                       <TouchableOpacity
                         style={[s.profileRow, isActive && s.profileRowActive]}
-                        onPress={() => handleSelectProfile(p.id)}
+                        onPress={() => isActive ? openEdit(p) : handleSelectProfile(p.id)}
                         activeOpacity={0.6}
                       >
-                        <View
-                          style={[
-                            s.profileAvatar,
-                            isActive && s.profileAvatarActive,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              s.profileAvatarText,
-                              isActive && s.profileAvatarTextActive,
-                            ]}
-                          >
+                        <View style={[s.profileAvatar, isActive && s.profileAvatarActive]}>
+                          <Text style={[s.profileAvatarText, isActive && s.profileAvatarTextActive]}>
                             {initial}
                           </Text>
                         </View>
                         <View style={s.profileInfo}>
-                          <Text
-                            style={[
-                              s.profileName,
-                              isActive && s.profileNameActive,
-                            ]}
-                          >
-                            {p.name}
-                          </Text>
+                          <Text style={[s.profileName, isActive && s.profileNameActive]}>{p.name}</Text>
                           <Text style={s.profileMeta}>
-                            {[
-                              p.age ? `Age ${p.age}` : null,
-                              p.weight_kg ? `${p.weight_kg} kg` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "No details set"}
+                            {[p.age ? `Age ${p.age}` : null, p.weight_kg ? `${p.weight_kg} kg` : null]
+                              .filter(Boolean).join(' · ') || 'No details set'}
                           </Text>
                         </View>
                         {isActive ? (
@@ -348,12 +407,7 @@ export default function ProfileScreen() {
                         ) : (
                           <TouchableOpacity
                             style={s.deleteBtn}
-                            hitSlop={{
-                              top: 12,
-                              bottom: 12,
-                              left: 12,
-                              right: 12,
-                            }}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             onPress={() => handleDeleteProfile(p)}
                           >
                             <Text style={s.deleteBtnText}>✕</Text>
@@ -365,11 +419,7 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              <TouchableOpacity
-                style={s.addProfileBtn}
-                onPress={() => setAddingNew(true)}
-                activeOpacity={0.75}
-              >
+              <TouchableOpacity style={s.addProfileBtn} onPress={() => setAddingNew(true)} activeOpacity={0.75}>
                 <Text style={s.addProfileIcon}>+</Text>
                 <Text style={s.addProfileText}>Add profile</Text>
               </TouchableOpacity>
@@ -384,13 +434,10 @@ export default function ProfileScreen() {
               <View style={s.formGroup}>
                 <Text style={s.formLabel}>Name</Text>
                 <TextInput
-                  style={s.sheetInput}
-                  placeholder="e.g. Sarah"
+                  style={s.sheetInput} placeholder="e.g. Sarah"
                   placeholderTextColor={Colors.textMuted}
-                  value={newName}
-                  onChangeText={setNewName}
-                  autoFocus
-                  autoCapitalize="words"
+                  value={newName} onChangeText={setNewName}
+                  autoFocus autoCapitalize="words"
                 />
               </View>
 
@@ -398,38 +445,38 @@ export default function ProfileScreen() {
                 <View style={[s.formGroup, { flex: 1 }]}>
                   <Text style={s.formLabel}>Age</Text>
                   <TextInput
-                    style={s.sheetInput}
-                    placeholder="—"
+                    style={s.sheetInput} placeholder="—"
                     placeholderTextColor={Colors.textMuted}
-                    value={newAge}
-                    onChangeText={setNewAge}
+                    value={newAge} onChangeText={setNewAge}
                     keyboardType="number-pad"
                   />
                 </View>
                 <View style={[s.formGroup, { flex: 1 }]}>
                   <Text style={s.formLabel}>Weight (kg)</Text>
                   <TextInput
-                    style={s.sheetInput}
-                    placeholder="—"
+                    style={s.sheetInput} placeholder="—"
                     placeholderTextColor={Colors.textMuted}
-                    value={newWeight}
-                    onChangeText={setNewWeight}
+                    value={newWeight} onChangeText={setNewWeight}
                     keyboardType="decimal-pad"
                   />
                 </View>
               </View>
 
+              <View style={s.formGroup}>
+                <Text style={s.formLabel}>Insulin-to-carb ratio (ICR)</Text>
+                <TextInput
+                  style={s.sheetInput} placeholder="e.g. 16"
+                  placeholderTextColor={Colors.textMuted}
+                  value={newIcr} onChangeText={setNewIcr}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
               <View style={s.sheetActions}>
-                <TouchableOpacity
-                  style={s.sheetCancel}
-                  onPress={() => setAddingNew(false)}
-                >
+                <TouchableOpacity style={s.sheetCancel} onPress={() => setAddingNew(false)}>
                   <Text style={s.sheetCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={s.sheetSave}
-                  onPress={handleAddProfile}
-                >
+                <TouchableOpacity style={s.sheetSave} onPress={handleAddProfile}>
                   <Text style={s.sheetSaveText}>Create profile</Text>
                 </TouchableOpacity>
               </View>

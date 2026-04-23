@@ -101,6 +101,11 @@ export function initSchema(): void {
     database.execSync(`ALTER TABLE meals ADD COLUMN logged_on_date TEXT`);
   }
 
+  if (!hasColumn(database, 'users', 'insulin_to_carb_ratio')) {
+    database.execSync(`ALTER TABLE users ADD COLUMN insulin_to_carb_ratio REAL`);
+    database.execSync(`UPDATE users SET insulin_to_carb_ratio = 16 WHERE insulin_to_carb_ratio IS NULL`);
+  }
+
   database.runSync(
     `UPDATE meals
      SET logged_on_date = COALESCE(NULLIF(logged_on_date, ''), substr(created_at, 1, 10))

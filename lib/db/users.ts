@@ -6,25 +6,53 @@ export interface UserRow {
   name: string;
   age: number | null;
   weight_kg: number | null;
+  insulin_to_carb_ratio: number | null;
   created_at: string;
 }
 
 export function getAllProfiles(): UserRow[] {
   const db = getDb();
   return db.getAllSync<UserRow>(
-    `SELECT id, name, age, weight_kg, created_at FROM users ORDER BY created_at ASC`,
+    `SELECT id, name, age, weight_kg, insulin_to_carb_ratio, created_at FROM users ORDER BY created_at ASC`,
   );
 }
 
-export function createProfile(name: string, age: number | null, weight_kg: number | null): UserRow {
+export function createProfile(
+  name: string,
+  age: number | null,
+  weight_kg: number | null,
+  insulin_to_carb_ratio: number | null = null,
+): UserRow {
   const db = getDb();
   const id = Crypto.randomUUID();
   const created_at = new Date().toISOString();
   db.runSync(
-    `INSERT INTO users (id, name, age, weight_kg, created_at) VALUES (?, ?, ?, ?, ?)`,
-    [id, name.trim(), age ?? null, weight_kg ?? null, created_at],
+    `INSERT INTO users (id, name, age, weight_kg, insulin_to_carb_ratio, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, name.trim(), age ?? null, weight_kg ?? null, insulin_to_carb_ratio ?? null, created_at],
   );
-  return { id, name: name.trim(), age, weight_kg, created_at };
+  return { id, name: name.trim(), age, weight_kg, insulin_to_carb_ratio, created_at };
+}
+
+export function updateProfile(
+  id: string,
+  patch: { name?: string; age?: number | null; weight_kg?: number | null; insulin_to_carb_ratio?: number | null },
+): void {
+  const db = getDb();
+  db.runSync(
+    `UPDATE users SET
+      name = COALESCE(?, name),
+      age = ?,
+      weight_kg = ?,
+      insulin_to_carb_ratio = ?
+     WHERE id = ?`,
+    [
+      patch.name?.trim() ?? null,
+      patch.age ?? null,
+      patch.weight_kg ?? null,
+      patch.insulin_to_carb_ratio ?? null,
+      id,
+    ],
+  );
 }
 
 export function deleteProfile(id: string): void {
