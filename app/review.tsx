@@ -159,10 +159,19 @@ export default function ReviewScreen() {
           </View>
         ))}
 
-        {/* Add item */}
-        <TouchableOpacity style={styles.addCard} onPress={openAdd} activeOpacity={0.78}>
-          <Text style={styles.addText}>+ Add an item</Text>
-        </TouchableOpacity>
+        {/* Add more */}
+        <View style={styles.addRow}>
+          <TouchableOpacity
+            style={styles.addScanButton}
+            onPress={() => router.push('/camera?mode=addmore')}
+            activeOpacity={0.78}
+          >
+            <Text style={styles.addScanText}>Scan another dish</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addManualButton} onPress={openAdd} activeOpacity={0.78}>
+            <Text style={styles.addManualText}>Add manually</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Total bar + CTA */}
@@ -387,20 +396,35 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontStyle: 'italic',
   },
-  addCard: {
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    borderStyle: 'dashed',
-    paddingVertical: 16,
-    alignItems: 'center',
-    backgroundColor: Colors.primary + '08',
+  addRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  addText: {
-    color: Colors.primary,
+  addScanButton: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  addScanText: {
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: 0.2,
+    fontSize: 14,
+  },
+  addManualButton: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+  },
+  addManualText: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
   },
   footer: {
     position: 'absolute',

@@ -3,7 +3,7 @@ import {
   View, Text, Image, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore } from '../lib/store/mealStore';
 import { Atmosphere } from '../components/Atmosphere';
@@ -37,14 +37,15 @@ function applyMultiplier(items: NutritionItem[], multiplier: number): NutritionI
 
 export default function PortionScreen() {
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isAddMore = mode === 'addmore';
   const insets = useSafeAreaInsets();
-  const { draft, setPortion, setAIResults } = useMealStore();
-  const [portionSize, setPortionSize] = useState<PortionSize>(draft.portionSize);
+  const { draft, setPortion, setAIResults, mergeItems } = useMealStore();
+  const [portionSize, setPortionSize] = useState<PortionSize>('full');
   const [analysingStep, setAnalysingStep] = useState<AnalysingStep>(null);
 
-  const imageUri = draft.imageBase64
-    ? `data:image/jpeg;base64,${draft.imageBase64}`
-    : null;
+  const activeBase64 = isAddMore ? draft.additionalImageBase64 : draft.imageBase64;
+  const imageUri = activeBase64 ? `data:image/jpeg;base64,${activeBase64}` : null;
 
   function handlePortionSelect(size: PortionSize, multiplier: number) {
     setPortionSize(size);
@@ -52,22 +53,27 @@ export default function PortionScreen() {
   }
 
   async function handleAnalyse() {
-    if (!draft.imageBase64) {
+    if (!activeBase64) {
       Alert.alert('No image', 'Go back and take a photo first.');
       return;
     }
     try {
       setAnalysingStep('identifying');
-      const identified = await identifyFoods(draft.imageBase64);
+      const identified = await identifyFoods(activeBase64);
       if (!identified.items.length) {
         throw new Error('No food items detected. Try retaking the photo.');
       }
       setAnalysingStep('estimating');
-      const result = await estimateNutrition(draft.imageBase64, identified.items);
+      const result = await estimateNutrition(activeBase64, identified.items);
       const multiplier = draft.portionMultiplier || 1.0;
       const adjustedItems = applyMultiplier(result.items, multiplier);
-      setAIResults(adjustedItems, result.overall_confidence, result.image_quality);
-      router.push('/review');
+      if (isAddMore) {
+        mergeItems(adjustedItems);
+        router.dismiss(2);
+      } else {
+        setAIResults(adjustedItems, result.overall_confidence, result.image_quality);
+        router.push('/review');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       Alert.alert(
@@ -101,7 +107,9 @@ export default function PortionScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backText}>Retake</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>How much did you eat?</Text>
+          <Text style={styles.title}>
+            {isAddMore ? 'Add another dish' : 'How much did you eat?'}
+          </Text>
         </View>
 
         {/* Photo preview */}

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore } from '../lib/store/mealStore';
 import { compressToBase64 } from '../lib/image/compress';
@@ -18,12 +18,25 @@ import { Colors } from '../constants/colors';
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isAddMore = mode === 'addmore';
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const setImage = useMealStore((s) => s.setImage);
+  const setAdditionalImage = useMealStore((s) => s.setAdditionalImage);
   const [processing, setProcessing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+
+  function storeImage(base64: string) {
+    if (isAddMore) {
+      setAdditionalImage(base64);
+      router.push('/portion?mode=addmore');
+    } else {
+      setImage(base64);
+      router.push('/portion');
+    }
+  }
 
   async function handleCapture() {
     if (!cameraRef.current || processing || !cameraReady) return;
@@ -32,8 +45,7 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 1 });
       if (!photo?.uri) throw new Error('No photo captured');
       const base64 = await compressToBase64(photo.uri);
-      setImage(base64);
-      router.push('/portion');
+      storeImage(base64);
     } catch {
       Alert.alert('Error', 'Could not capture photo. Please try again.');
     } finally {
@@ -52,8 +64,7 @@ export default function CameraScreen() {
     setProcessing(true);
     try {
       const base64 = await compressToBase64(result.assets[0].uri);
-      setImage(base64);
-      router.push('/portion');
+      storeImage(base64);
     } catch {
       Alert.alert('Error', 'Could not load image. Please try again.');
     } finally {
@@ -104,7 +115,7 @@ export default function CameraScreen() {
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <Text style={styles.closeText}>Close</Text>
+            <Text style={styles.closeText}>{isAddMore ? 'Back' : 'Close'}</Text>
           </TouchableOpacity>
           <View style={styles.readyPill}>
             <Text style={styles.readyText}>{cameraReady ? 'Ready' : 'Loading'}</Text>
