@@ -196,42 +196,51 @@ export default function MealDetailScreen() {
             return (
               <View key={item.id}>
                 {i > 0 && <View style={s.itemDivider} />}
-                <TouchableOpacity
-                  style={s.itemRow}
-                  onPress={() => !isEditing && startEditItem(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={s.itemLeft}>
-                    {isEditing ? (
+                {isEditing ? (
+                  <View style={s.itemRowEditing}>
+                    <View style={s.itemLeft}>
                       <TextInput
                         ref={editInputRef}
                         style={s.itemNameInput}
                         value={editingName}
                         onChangeText={setEditingName}
-                        onBlur={() => commitEditItem(item)}
                         onSubmitEditing={() => commitEditItem(item)}
                         returnKeyType="done"
                         selectTextOnFocus
                       />
-                    ) : (
-                      <Text style={s.itemName}>{displayName}</Text>
-                    )}
-                    {reestimatingId === item.id ? (
-                    <Text style={s.itemMacrosLoading}>Recalculating…</Text>
-                  ) : (
-                    <Text style={s.itemMacros}>
-                      {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
-                    </Text>
-                  )}
+                      <Text style={s.itemMacros}>
+                        {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={s.saveBtn} onPress={() => commitEditItem(item)}>
+                      <Text style={s.saveBtnText}>Save</Text>
+                    </TouchableOpacity>
                   </View>
-                  {reestimatingId === item.id ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : (
-                    <Text style={s.itemCarbs}>
-                      {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={s.itemRow}
+                    onPress={() => reestimatingId !== item.id && startEditItem(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={s.itemLeft}>
+                      <Text style={s.itemName}>{displayName}</Text>
+                      {reestimatingId === item.id ? (
+                        <Text style={s.itemMacrosLoading}>Recalculating…</Text>
+                      ) : (
+                        <Text style={s.itemMacros}>
+                          {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
+                        </Text>
+                      )}
+                    </View>
+                    {reestimatingId === item.id ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : (
+                      <Text style={s.itemCarbs}>
+                        {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })}
@@ -330,11 +339,25 @@ const s = StyleSheet.create({
   },
   itemLeft:   { flex: 1, gap: 2 },
   itemName:   { fontSize: 14, fontWeight: '600', color: Colors.text },
+  itemRowEditing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
   itemNameInput: {
     fontSize: 14, fontWeight: '600', color: Colors.text,
-    borderBottomWidth: 1, borderBottomColor: Colors.primary,
-    paddingVertical: 0, marginBottom: 1,
+    borderBottomWidth: 1.5, borderBottomColor: Colors.primary,
+    paddingVertical: 0, marginBottom: 2,
   },
+  saveBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  saveBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   itemMacros: { fontSize: 11, color: Colors.textMuted },
   itemMacrosLoading: { fontSize: 11, color: Colors.primary, fontStyle: 'italic' },
   itemCarbs:  { fontSize: 15, fontWeight: '700', color: Colors.carbs },
