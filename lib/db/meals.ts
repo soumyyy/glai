@@ -152,6 +152,93 @@ export function getMealItems(mealId: string): MealItemRow[] {
   return db.getAllSync<MealItemRow>(`SELECT * FROM meal_items WHERE meal_id = ?`, [mealId]);
 }
 
+export function upsertCloudMeal(meal: MealRow): void {
+  const db = getDb();
+  db.runSync(
+    `INSERT INTO meals (id, user_id, created_at, logged_on_date, meal_type, meal_name, portion_size, portion_multiplier,
+      total_carbs_low_g, total_carbs_high_g, total_protein_g, total_fat_g, total_calories_kcal,
+      ai_confidence, image_quality, notes, synced_to_cloud)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     ON CONFLICT(id) DO UPDATE SET
+       user_id = excluded.user_id,
+       created_at = excluded.created_at,
+       logged_on_date = excluded.logged_on_date,
+       meal_type = excluded.meal_type,
+       meal_name = excluded.meal_name,
+       portion_size = excluded.portion_size,
+       portion_multiplier = excluded.portion_multiplier,
+       total_carbs_low_g = excluded.total_carbs_low_g,
+       total_carbs_high_g = excluded.total_carbs_high_g,
+       total_protein_g = excluded.total_protein_g,
+       total_fat_g = excluded.total_fat_g,
+       total_calories_kcal = excluded.total_calories_kcal,
+       ai_confidence = excluded.ai_confidence,
+       image_quality = excluded.image_quality,
+       notes = excluded.notes,
+       synced_to_cloud = 1`,
+    [
+      meal.id,
+      meal.user_id,
+      meal.created_at,
+      meal.logged_on_date,
+      meal.meal_type,
+      meal.meal_name,
+      meal.portion_size,
+      meal.portion_multiplier,
+      meal.total_carbs_low_g,
+      meal.total_carbs_high_g,
+      meal.total_protein_g,
+      meal.total_fat_g,
+      meal.total_calories_kcal,
+      meal.ai_confidence,
+      meal.image_quality,
+      meal.notes,
+    ],
+  );
+}
+
+export function upsertCloudMealItems(items: MealItemRow[]): void {
+  const db = getDb();
+  db.execSync('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    for (const item of items) {
+      db.runSync(
+        `INSERT INTO meal_items (id, meal_id, ai_identified_name, corrected_name, estimated_weight_g,
+          carbs_low_g, carbs_high_g, protein_g, fat_g, calories_kcal, ai_notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           meal_id = excluded.meal_id,
+           ai_identified_name = excluded.ai_identified_name,
+           corrected_name = excluded.corrected_name,
+           estimated_weight_g = excluded.estimated_weight_g,
+           carbs_low_g = excluded.carbs_low_g,
+           carbs_high_g = excluded.carbs_high_g,
+           protein_g = excluded.protein_g,
+           fat_g = excluded.fat_g,
+           calories_kcal = excluded.calories_kcal,
+           ai_notes = excluded.ai_notes`,
+        [
+          item.id,
+          item.meal_id,
+          item.ai_identified_name,
+          item.corrected_name,
+          item.estimated_weight_g,
+          item.carbs_low_g,
+          item.carbs_high_g,
+          item.protein_g,
+          item.fat_g,
+          item.calories_kcal,
+          item.ai_notes,
+        ],
+      );
+    }
+    db.execSync('COMMIT');
+  } catch (error) {
+    db.execSync('ROLLBACK');
+    throw error;
+  }
+}
+
 export function deleteMeal(mealId: string): void {
   const db = getDb();
   const meal = db.getFirstSync<{ synced_to_cloud: number; logged_on_date: string }>(

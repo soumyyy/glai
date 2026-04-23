@@ -14,6 +14,7 @@
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Glai uses the camera to capture meal photos for nutrition analysis.",
         "NSPhotoLibraryUsageDescription": "Glai lets you choose meal photos from your library for nutrition analysis."
       }

@@ -9,6 +9,7 @@ import { useMealStore } from '../lib/store/mealStore';
 import { identifyFoods } from '../lib/ai/identify';
 import { estimateNutrition } from '../lib/ai/estimate';
 import { Colors } from '../constants/colors';
+import { getAnalysisErrorMessage } from '../lib/errors/userMessages';
 import type { PortionSize } from '../lib/store/mealStore';
 import type { NutritionItem } from '../lib/ai/types';
 
@@ -73,8 +74,13 @@ export default function PortionScreen() {
         router.push('/review');
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      Alert.alert('Analysis failed', msg, [
+      const errorMessage = getAnalysisErrorMessage(err);
+      console.warn('[Analysis] add-more failure', {
+        title: errorMessage.title,
+        message: errorMessage.message,
+        error: err,
+      });
+      Alert.alert(errorMessage.title, errorMessage.message, [
         { text: 'Retake', onPress: () => router.back() },
         { text: 'Retry', onPress: handleAnalyse },
       ]);

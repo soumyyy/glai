@@ -40,6 +40,29 @@ export function getSummaryForDate(date: string): DailySummaryRow | null {
   );
 }
 
+export function upsertCloudDailySummary(summary: DailySummaryRow): void {
+  const db = getDb();
+  db.runSync(
+    `INSERT INTO daily_summaries (date, user_id, total_carbs_g, total_protein_g, total_fat_g, total_calories_kcal, meal_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(date, user_id) DO UPDATE SET
+       total_carbs_g = excluded.total_carbs_g,
+       total_protein_g = excluded.total_protein_g,
+       total_fat_g = excluded.total_fat_g,
+       total_calories_kcal = excluded.total_calories_kcal,
+       meal_count = excluded.meal_count`,
+    [
+      summary.date,
+      summary.user_id,
+      summary.total_carbs_g,
+      summary.total_protein_g,
+      summary.total_fat_g,
+      summary.total_calories_kcal,
+      summary.meal_count,
+    ],
+  );
+}
+
 export function getSummariesForRange(startDate: string, endDate: string): DailySummaryRow[] {
   const db = getDb();
   return db.getAllSync<DailySummaryRow>(

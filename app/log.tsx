@@ -26,6 +26,7 @@ import type { NutritionItem } from "../lib/ai/types";
 import type { MealType, PortionSize } from "../lib/db/meals";
 import { saveMeal } from "../lib/db/meals";
 import { upsertDailySummary } from "../lib/db/summaries";
+import { getAnalysisErrorMessage, getSyncErrorMessage } from "../lib/errors/userMessages";
 import { useMealStore } from "../lib/store/mealStore";
 import { syncPendingMeals } from "../lib/supabase/sync";
 
@@ -221,9 +222,15 @@ export default function LogScreen() {
       goTo(1);
     } catch (err) {
       setAnalysingStep(null);
+      const errorMessage = getAnalysisErrorMessage(err);
+      console.warn('[Analysis] user-facing failure', {
+        title: errorMessage.title,
+        message: errorMessage.message,
+        error: err,
+      });
       Alert.alert(
-        "Analysis failed",
-        err instanceof Error ? err.message : "Unknown error",
+        errorMessage.title,
+        errorMessage.message,
         [
           { text: "Retake", onPress: () => router.back() },
           { text: "Retry", onPress: handleAnalyse },
@@ -293,7 +300,11 @@ export default function LogScreen() {
         notes: notes.trim() || undefined,
       });
       upsertDailySummary(saved.loggedOnDate);
-      syncPendingMeals().catch((e) => console.warn("[sync]", e));
+      syncPendingMeals().catch((e) => {
+        const syncMessage = getSyncErrorMessage(e);
+        console.warn("[sync]", e);
+        Alert.alert(syncMessage.title, syncMessage.message);
+      });
       reset();
       router.dismissAll();
     } catch (err) {

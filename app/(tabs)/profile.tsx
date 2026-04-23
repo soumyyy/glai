@@ -9,6 +9,7 @@ import { LOCAL_USER } from '../../constants/user';
 import { getOpenAIConfig, hasSupabaseConfig } from '../../lib/config';
 import { exportMealsCSV } from '../../lib/export';
 import { getDb } from '../../lib/db/schema';
+import { syncAndRestoreCloudMeals } from '../../lib/supabase/sync';
 
 function isOpenAIConfigured() {
   try { getOpenAIConfig(); return true; } catch { return false; }
@@ -24,6 +25,7 @@ export default function ProfileScreen() {
   const openAIConfigured = isOpenAIConfigured();
   const supabaseConfigured = hasSupabaseConfig();
   const [exporting, setExporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   async function handleExport() {
     if (exporting) return;
@@ -64,6 +66,23 @@ export default function ProfileScreen() {
         },
       ],
     );
+  }
+
+  async function handleRestore() {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      await syncAndRestoreCloudMeals();
+      Alert.alert('Cloud restore complete', 'Meals saved in Supabase are now available on this device.');
+    } catch (error) {
+      Alert.alert(
+        'Cloud restore failed',
+        'Could not restore from cloud right now. Check your connection and try again.',
+      );
+      console.warn('[Restore] manual restore failed', error);
+    } finally {
+      setRestoring(false);
+    }
   }
 
   const initial = LOCAL_USER.name.slice(0, 1).toUpperCase();
@@ -149,6 +168,33 @@ export default function ProfileScreen() {
             </View>
           </View>
           {exporting ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : (
+            <View style={styles.exportChevron}>
+              <View style={styles.exportChevronLine1} />
+              <View style={styles.exportChevronLine2} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.exportCard}
+          onPress={handleRestore}
+          disabled={restoring || !supabaseConfigured}
+          activeOpacity={0.78}
+        >
+          <View style={styles.exportLeft}>
+            <View style={styles.exportIcon}>
+              <View style={styles.exportIconArrow} />
+            </View>
+            <View>
+              <Text style={styles.exportTitle}>Restore from cloud</Text>
+              <Text style={styles.exportSubtitle}>
+                Pull meals from Supabase after reinstall
+              </Text>
+            </View>
+          </View>
+          {restoring ? (
             <ActivityIndicator color={Colors.primary} />
           ) : (
             <View style={styles.exportChevron}>

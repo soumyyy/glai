@@ -9,6 +9,7 @@ import { Colors } from '../../constants/colors';
 import { formatLocalDate } from '../../lib/date';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
 import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries';
+import { syncAndRestoreCloudMeals } from '../../lib/supabase/sync';
 
 function getGreeting(now: Date) {
   const hour = now.getHours();
@@ -35,8 +36,17 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!isFocused) return;
     const today = formatLocalDate(new Date());
-    setSummary(getSummaryForDate(today));
-    setMeals(getMealsForDate(today).reverse());
+    function refreshToday() {
+      setSummary(getSummaryForDate(today));
+      setMeals(getMealsForDate(today).reverse());
+    }
+
+    refreshToday();
+    syncAndRestoreCloudMeals()
+      .then(refreshToday)
+      .catch((error) => {
+        console.warn('[Restore] home refresh failed', error);
+      });
   }, [isFocused]);
 
   const today = new Date();

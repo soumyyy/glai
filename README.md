@@ -120,8 +120,9 @@ Important detail:
 Supabase sync is best-effort and non-blocking:
 
 - if env vars are missing, sync is skipped
-- the local user row is synced first
 - meals, meal items, and daily summaries are upserted
+- pending local deletes are replayed against Supabase
+- cloud meals, items, and summaries are restored back into SQLite on Home/Profile restore
 - a meal is marked synced locally only after the related cloud writes succeed
 
 Current hosted project:
@@ -150,6 +151,13 @@ supabase db pull
 supabase start
 supabase stop
 ```
+
+Current prototype policy:
+
+- no login in v1
+- a seeded local user exists so the current single-person app can sync
+- RLS policies are permissive for the prototype so the schema can later support more family members without hardcoding one user into database policy
+- before any broader public release, replace those prototype policies with Supabase Auth or an Edge Function write layer
 
 Recommended workflow:
 
