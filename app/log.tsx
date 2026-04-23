@@ -269,6 +269,9 @@ export default function LogScreen() {
     const prevItem = draft.items[index];
     updateItem(index, { name });
 
+    const updatedItems = draft.items.map((it, idx) => idx === index ? { ...it, name } : it);
+    setMealName(generateMealName(updatedItems));
+
     if (name === prevItem.name) return;
 
     setReestimatingIndex(index);
