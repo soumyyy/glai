@@ -6,7 +6,6 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore } from '../lib/store/mealStore';
-import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { Atmosphere } from '../components/Atmosphere';
 import { Colors } from '../constants/colors';
 import type { NutritionItem } from '../lib/ai/types';
@@ -38,9 +37,6 @@ export default function ReviewScreen() {
   const { draft, updateItem, removeItem, addItem } = useMealStore();
   const [editState, setEditState] = useState<EditState | null>(null);
 
-  const showConfidence = draft.overallConfidence > 0;
-  const showLowConfidenceWarning = showConfidence && draft.overallConfidence < 60;
-  const showPoorImageWarning = draft.imageQuality === 'poor';
   const canSave = draft.items.length > 0;
 
   const totals = draft.items.reduce(
@@ -93,7 +89,7 @@ export default function ReviewScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 140 },
+          { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 140 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -102,38 +98,9 @@ export default function ReviewScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.overline}>REVIEW</Text>
-          <Text style={styles.title}>Your meal</Text>
-          <Text style={styles.subtitle}>Review what the AI identified. Tap any item to correct the name.</Text>
+          <Text style={styles.title}>Review your meal</Text>
+          <Text style={styles.subtitle}>Tap any item to correct the name.</Text>
         </View>
-
-        {/* Confidence + warnings */}
-        {showConfidence ? (
-          <View style={styles.badgeRow}>
-            <ConfidenceBadge confidence={draft.overallConfidence} />
-            <View style={styles.qualityPill}>
-              <Text style={styles.qualityPillText}>{draft.imageQuality} image</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {showLowConfidenceWarning ? (
-          <View style={[styles.warningCard, styles.warningCardAmber]}>
-            <Text style={styles.warningTitle}>Low confidence</Text>
-            <Text style={styles.warningBody}>
-              We&apos;re not confident about this photo. Review each item carefully before confirming.
-            </Text>
-          </View>
-        ) : null}
-
-        {showPoorImageWarning ? (
-          <View style={[styles.warningCard, styles.warningCardRed]}>
-            <Text style={[styles.warningTitle, styles.warningTitleRed]}>Poor image quality</Text>
-            <Text style={styles.warningBody}>
-              Photo was hard to read. Consider retaking for better accuracy.
-            </Text>
-          </View>
-        ) : null}
 
         {/* Items */}
         <View style={styles.sectionHeader}>
@@ -202,21 +169,21 @@ export default function ReviewScreen() {
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
         <View style={styles.totalRow}>
           <View style={styles.totalItem}>
-            <Text style={[styles.totalValue, { color: Colors.carbs }]}>
+            <Text style={styles.totalValue}>
               {whole(totals.carbsLow)}–{whole(totals.carbsHigh)}g
             </Text>
             <Text style={styles.totalLabel}>Carbs</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={[styles.totalValue, { color: Colors.protein }]}>{whole(totals.protein)}g</Text>
+            <Text style={styles.totalValue}>{whole(totals.protein)}g</Text>
             <Text style={styles.totalLabel}>Protein</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={[styles.totalValue, { color: Colors.fat }]}>{whole(totals.fat)}g</Text>
+            <Text style={styles.totalValue}>{whole(totals.fat)}g</Text>
             <Text style={styles.totalLabel}>Fat</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={[styles.totalValue, { color: Colors.calories }]}>{whole(totals.calories)}</Text>
+            <Text style={styles.totalValue}>{whole(totals.calories)}</Text>
             <Text style={styles.totalLabel}>kcal</Text>
           </View>
         </View>
@@ -294,72 +261,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  overline: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    marginTop: 4,
-  },
   title: {
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 28,
+    lineHeight: 33,
     color: Colors.text,
     fontWeight: '700',
-    letterSpacing: -1.2,
+    letterSpacing: -0.9,
   },
   subtitle: {
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  qualityPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceStrong,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  qualityPillText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-    letterSpacing: 0.3,
-  },
-  warningCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 16,
-    gap: 6,
-  },
-  warningCardAmber: {
-    backgroundColor: Colors.warning + '12',
-    borderColor: Colors.warning + '40',
-  },
-  warningCardRed: {
-    backgroundColor: Colors.error + '10',
-    borderColor: Colors.error + '35',
-  },
-  warningTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#8C6500',
-  },
-  warningTitleRed: {
-    color: Colors.error,
-  },
-  warningBody: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: Colors.textSecondary,
   },
   sectionHeader: {
     marginTop: 4,
@@ -513,6 +425,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 14,
     fontWeight: '700',
+    color: Colors.text,
   },
   totalLabel: {
     fontSize: 10,
