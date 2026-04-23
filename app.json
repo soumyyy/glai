@@ -2,6 +2,7 @@
   "expo": {
     "name": "glai",
     "slug": "glai",
+    "owner": "soumymaheshwri",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,7 +10,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.soumymaheshwri.glai",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Glai uses the camera to capture meal photos for nutrition analysis.",
+        "NSPhotoLibraryUsageDescription": "Glai lets you choose meal photos from your library for nutrition analysis."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -45,6 +52,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8520876b-9055-49e6-98eb-b842887511b9"
+      }
     }
   }
 }

@@ -51,6 +51,40 @@ npx tsc --noEmit
 npm run lint
 ```
 
+## iOS TestFlight with EAS
+
+The project is configured for EAS iOS builds:
+
+- Expo owner: `soumymaheshwri`
+- iOS bundle identifier: `com.soumymaheshwri.glai`
+- production build profile: `eas build --platform ios --profile production`
+- production submit profile: `eas submit --platform ios --profile production`
+
+Before the first TestFlight build, make sure the EAS project is linked and the build-time environment variables exist in EAS:
+
+```bash
+npx eas project:init
+npx eas env:create --name EXPO_PUBLIC_OPENAI_API_KEY --value <openai-key> --environment production
+npx eas env:create --name EXPO_PUBLIC_OPENAI_MODEL --value gpt-4o-2024-11-20 --environment production
+npx eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value <supabase-url> --environment production
+npx eas env:create --name EXPO_PUBLIC_SUPABASE_KEY --value <supabase-publishable-key> --environment production
+```
+
+Build and submit to TestFlight:
+
+```bash
+npm run build:ios
+npm run submit:ios
+```
+
+Or build and submit automatically:
+
+```bash
+npm run build-submit:ios
+```
+
+EAS will prompt for Apple Developer credentials, App Store Connect access, signing credentials, and the App Store app record on first setup.
+
 ## Backend architecture
 
 ### OpenAI
