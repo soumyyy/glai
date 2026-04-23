@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
 import { Colors } from '../../constants/colors';
-import { deleteMeal, getMealById, getMealItems, type MealItemRow, type MealRow } from '../../lib/db/meals';
+import { deleteMeal, getMealById, getMealItems, updateMealItem, recalculateMealTotals, type MealItemRow, type MealRow } from '../../lib/db/meals';
+import { reestimateItem } from '../../lib/ai/reestimate';
 import { upsertDailySummary } from '../../lib/db/summaries';
 import { syncPendingMeals } from '../../lib/supabase/sync';
 import { useProfileStore } from '../../lib/store/profileStore';
@@ -34,6 +35,10 @@ export default function MealDetailScreen() {
   const { id }    = useLocalSearchParams<{ id: string }>();
   const [meal, setMeal]   = useState<MealRow | null>(null);
   const [items, setItems] = useState<MealItemRow[]>([]);
+  const [editingItemId,   setEditingItemId]   = useState<string | null>(null);
+  const [editingName,     setEditingName]     = useState('');
+  const [reestimatingId,  setReestimatingId]  = useState<string | null>(null);
+  const editInputRef = useRef<TextInput>(null);
 
   const { activeUserId, profiles } = useProfileStore();
   const activeProfile = profiles.find(p => p.id === activeUserId);
@@ -44,6 +49,39 @@ export default function MealDetailScreen() {
     setMeal(getMealById(id));
     setItems(getMealItems(id));
   }, [id, isFocused]);
+
+  function startEditItem(item: MealItemRow) {
+    setEditingItemId(item.id);
+    setEditingName(item.corrected_name ?? item.ai_identified_name);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  }
+
+  async function commitEditItem(item: MealItemRow) {
+    const name = editingName.trim();
+    setEditingItemId(null);
+
+    if (!name || name === (item.corrected_name ?? item.ai_identified_name)) return;
+
+    // Optimistically update the name
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, corrected_name: name } : i));
+    setReestimatingId(item.id);
+
+    try {
+      const nutrition = await reestimateItem(name, item.estimated_weight_g);
+      updateMealItem(item.id, { corrected_name: name, ...nutrition });
+      if (meal) {
+        recalculateMealTotals(meal.id);
+        setMeal(getMealById(meal.id));
+      }
+      setItems(prev => prev.map(i =>
+        i.id === item.id ? { ...i, corrected_name: name, ...nutrition } : i,
+      ));
+    } catch (err) {
+      console.warn('[reestimate] failed', err);
+    } finally {
+      setReestimatingId(null);
+    }
+  }
 
   function handleDelete() {
     if (!meal) return;
@@ -152,22 +190,51 @@ export default function MealDetailScreen() {
         {/* Items */}
         <Text style={s.sectionTitle}>Items</Text>
         <View style={s.itemsCard}>
-          {items.map((item, i) => (
-            <View key={item.id}>
-              {i > 0 && <View style={s.itemDivider} />}
-              <View style={s.itemRow}>
-                <View style={s.itemLeft}>
-                  <Text style={s.itemName}>{item.corrected_name ?? item.ai_identified_name}</Text>
-                  <Text style={s.itemMacros}>
-                    {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
-                  </Text>
-                </View>
-                <Text style={s.itemCarbs}>
-                  {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g
-                </Text>
+          {items.map((item, i) => {
+            const isEditing = editingItemId === item.id;
+            const displayName = item.corrected_name ?? item.ai_identified_name;
+            return (
+              <View key={item.id}>
+                {i > 0 && <View style={s.itemDivider} />}
+                <TouchableOpacity
+                  style={s.itemRow}
+                  onPress={() => !isEditing && startEditItem(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={s.itemLeft}>
+                    {isEditing ? (
+                      <TextInput
+                        ref={editInputRef}
+                        style={s.itemNameInput}
+                        value={editingName}
+                        onChangeText={setEditingName}
+                        onBlur={() => commitEditItem(item)}
+                        onSubmitEditing={() => commitEditItem(item)}
+                        returnKeyType="done"
+                        selectTextOnFocus
+                      />
+                    ) : (
+                      <Text style={s.itemName}>{displayName}</Text>
+                    )}
+                    {reestimatingId === item.id ? (
+                    <Text style={s.itemMacrosLoading}>Recalculating…</Text>
+                  ) : (
+                    <Text style={s.itemMacros}>
+                      {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat · {whole(item.calories_kcal)} kcal
+                    </Text>
+                  )}
+                  </View>
+                  {reestimatingId === item.id ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <Text style={s.itemCarbs}>
+                      {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g
+                    </Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* Delete */}
@@ -263,7 +330,13 @@ const s = StyleSheet.create({
   },
   itemLeft:   { flex: 1, gap: 2 },
   itemName:   { fontSize: 14, fontWeight: '600', color: Colors.text },
+  itemNameInput: {
+    fontSize: 14, fontWeight: '600', color: Colors.text,
+    borderBottomWidth: 1, borderBottomColor: Colors.primary,
+    paddingVertical: 0, marginBottom: 1,
+  },
   itemMacros: { fontSize: 11, color: Colors.textMuted },
+  itemMacrosLoading: { fontSize: 11, color: Colors.primary, fontStyle: 'italic' },
   itemCarbs:  { fontSize: 15, fontWeight: '700', color: Colors.carbs },
 
   insulinCard: {

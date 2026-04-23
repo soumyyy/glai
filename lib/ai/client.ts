@@ -48,6 +48,82 @@ function extractErrorMessage(error: unknown): string {
   return 'Unknown OpenAI error.';
 }
 
+interface StructuredTextRequest<T> {
+  schemaName: string;
+  schema: Record<string, unknown>;
+  systemPrompt: string;
+  userPrompt: string;
+  validate: (value: unknown) => T;
+}
+
+export async function requestStructuredTextJson<T>(
+  params: StructuredTextRequest<T>,
+): Promise<T> {
+  const { apiKey, model, timeoutMs, maxRetries } = getOpenAIConfig();
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const attemptNumber = attempt + 1;
+
+    logOpenAI('text-request:start', {
+      schemaName: params.schemaName,
+      model,
+      attempt: attemptNumber,
+      userPrompt: params.userPrompt,
+    });
+
+    try {
+      const response = await fetch(OPENAI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          temperature: 0.1,
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: params.schemaName, strict: true, schema: params.schema },
+          },
+          messages: [
+            { role: 'system', content: params.systemPrompt },
+            { role: 'user',   content: params.userPrompt },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        if (attempt < maxRetries && RETRYABLE_STATUS_CODES.has(response.status)) {
+          await sleep(500 * (attempt + 1));
+          continue;
+        }
+        throw new Error(`OpenAI request failed (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      const message = data.choices?.[0]?.message;
+
+      if (message?.refusal) throw new Error(`OpenAI refused the request: ${message.refusal}`);
+      if (typeof message?.content !== 'string' || !message.content.trim()) throw new Error('OpenAI returned an empty response.');
+
+      let parsed: unknown;
+      try { parsed = JSON.parse(message.content); } catch { throw new Error('OpenAI returned malformed JSON.'); }
+
+      logOpenAI('text-request:parsed', { schemaName: params.schemaName, parsed });
+      return params.validate(parsed);
+    } catch (error) {
+      const isRetryable = error instanceof TypeError || (error instanceof Error && error.name === 'AbortError');
+      if (attempt < maxRetries && isRetryable) { await sleep(500 * (attempt + 1)); continue; }
+      throw new Error(extractErrorMessage(error));
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw new Error('OpenAI request failed after retries.');
+}
+
 export async function requestStructuredVisionJson<T>(
   params: StructuredVisionRequest<T>,
 ): Promise<T> {
