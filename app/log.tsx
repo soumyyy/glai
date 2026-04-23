@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../constants/colors";
 import { estimateNutrition } from "../lib/ai/estimate";
 import { identifyFoods } from "../lib/ai/identify";
+import { reestimateItem } from "../lib/ai/reestimate";
 import type { NutritionItem } from "../lib/ai/types";
 import type { MealType, PortionSize } from "../lib/db/meals";
 import { saveMeal } from "../lib/db/meals";
@@ -131,6 +132,7 @@ export default function LogScreen() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [reestimatingIndex, setReestimatingIndex] = useState<number | null>(null);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
 
@@ -251,19 +253,33 @@ export default function LogScreen() {
     setEditState(null);
   }
 
-  function commitEdit() {
+  async function commitEdit() {
     if (!editState) return;
-    const t = editState.name.trim();
-    if (!t) {
-      closeEdit();
+    const name = editState.name.trim();
+    const index = editState.index;
+    closeEdit();
+
+    if (!name) return;
+
+    if (index === null) {
+      addItem({ ...EMPTY_ITEM, name, ai_identified_name: name });
       return;
     }
-    if (editState.index === null) {
-      addItem({ ...EMPTY_ITEM, name: t, ai_identified_name: t });
-    } else {
-      updateItem(editState.index, { name: t });
+
+    const prevItem = draft.items[index];
+    updateItem(index, { name });
+
+    if (name === prevItem.name) return;
+
+    setReestimatingIndex(index);
+    try {
+      const nutrition = await reestimateItem(name, prevItem.estimated_weight_g);
+      updateItem(index, { name, ...nutrition });
+    } catch (err) {
+      console.warn('[reestimate] failed', err);
+    } finally {
+      setReestimatingIndex(null);
     }
-    closeEdit();
   }
 
   function handleRemove(i: number) {
@@ -369,31 +385,44 @@ export default function LogScreen() {
         {draft.items.length === 0 && (
           <Text style={s.emptyText}>No items detected — add one below.</Text>
         )}
-        {draft.items.map((item, i) => (
-          <View key={i} style={s.itemRow}>
-            <TouchableOpacity
-              style={s.itemMain}
-              onPress={() => openEdit(i)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.itemName}>{item.name}</Text>
-              <Text style={s.itemCarbs}>
-                {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g carbs
-              </Text>
-              <Text style={s.itemMacros}>
-                {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat ·{" "}
-                {whole(item.calories_kcal)} kcal
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.removeBtn}
-              onPress={() => handleRemove(i)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={s.removeBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+        {draft.items.map((item, i) => {
+          const isReestimating = reestimatingIndex === i;
+          return (
+            <View key={i} style={s.itemRow}>
+              <TouchableOpacity
+                style={s.itemMain}
+                onPress={() => !isReestimating && openEdit(i)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.itemName}>{item.name}</Text>
+                {isReestimating ? (
+                  <View style={s.reestimatingRow}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <Text style={s.reestimatingText}>Recalculating…</Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={s.itemCarbs}>
+                      {whole(item.carbs_low_g)}–{whole(item.carbs_high_g)}g carbs
+                    </Text>
+                    <Text style={s.itemMacros}>
+                      {whole(item.protein_g)}g protein · {whole(item.fat_g)}g fat ·{" "}
+                      {whole(item.calories_kcal)} kcal
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.removeBtn}
+                onPress={() => handleRemove(i)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                disabled={isReestimating}
+              >
+                <Text style={[s.removeBtnText, isReestimating && { opacity: 0.3 }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
 
         {/* Add more */}
         <View style={s.addRow}>
@@ -500,9 +529,7 @@ export default function LogScreen() {
       </View>
 
       {/* Footer */}
-      <View
-        style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}
-      >
+      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         {page === 0 && (
           <TouchableOpacity
             style={[s.cta, analysingStep !== null && s.ctaLoading]}
@@ -794,6 +821,8 @@ const s = StyleSheet.create({
   },
   itemCarbs: { fontSize: 13, fontWeight: "700", color: Colors.carbs },
   itemMacros: { fontSize: 11, color: Colors.textMuted, fontWeight: "500" },
+  reestimatingRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  reestimatingText: { fontSize: 12, color: Colors.primary, fontStyle: "italic" },
   removeBtn: { paddingTop: 2 },
   removeBtnText: { fontSize: 14, color: Colors.textMuted },
 
