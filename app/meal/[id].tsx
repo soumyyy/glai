@@ -5,7 +5,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
 import { Colors } from '../../constants/colors';
-import { deleteMeal, getMealById, getMealItems, updateMealItem, recalculateMealTotals, type MealItemRow, type MealRow } from '../../lib/db/meals';
+import { deleteMeal, getMealById, getMealItems, updateMealItem, updateMealName, recalculateMealTotals, type MealItemRow, type MealRow } from '../../lib/db/meals';
 import { reestimateItem } from '../../lib/ai/reestimate';
 import { upsertDailySummary } from '../../lib/db/summaries';
 import { syncPendingMeals } from '../../lib/supabase/sync';
@@ -71,11 +71,18 @@ export default function MealDetailScreen() {
       updateMealItem(item.id, { corrected_name: name, ...nutrition });
       if (meal) {
         recalculateMealTotals(meal.id);
-        setMeal(getMealById(meal.id));
+        const updatedItems = items.map(i =>
+          i.id === item.id ? { ...i, corrected_name: name, ...nutrition } : i,
+        );
+        const newMealName = updatedItems
+          .slice(0, 3)
+          .map(i => i.corrected_name ?? i.ai_identified_name)
+          .filter(Boolean)
+          .join(', ') || meal.meal_name;
+        updateMealName(meal.id, newMealName);
+        setMeal({ ...getMealById(meal.id)!, meal_name: newMealName });
+        setItems(updatedItems);
       }
-      setItems(prev => prev.map(i =>
-        i.id === item.id ? { ...i, corrected_name: name, ...nutrition } : i,
-      ));
     } catch (err) {
       console.warn('[reestimate] failed', err);
     } finally {

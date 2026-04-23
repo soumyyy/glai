@@ -279,6 +279,11 @@ export function updateMealItem(itemId: string, patch: MealItemNutritionPatch): v
   );
 }
 
+export function updateMealName(mealId: string, name: string): void {
+  const db = getDb();
+  db.runSync(`UPDATE meals SET meal_name = ? WHERE id = ?`, [name.trim(), mealId]);
+}
+
 export function recalculateMealTotals(mealId: string): void {
   const db = getDb();
   db.runSync(
