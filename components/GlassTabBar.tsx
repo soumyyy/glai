@@ -3,7 +3,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -38,7 +38,7 @@ const ICONS: Record<
 
 const GREEN = "#1E6C62";
 const BAR_H = 58;
-const CAM_SIZE = 60; // taller than bar so it stands out
+const CAM_SIZE = 60;
 const H_PAD = 16;
 const GAP = 12;
 
@@ -53,7 +53,8 @@ export function GlassTabBar({
 }: BottomTabBarProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const BOTTOM_PAD = Math.max(insets.bottom, 12);
   const tabsWidth = width - H_PAD * 2 - CAM_SIZE - GAP;
@@ -61,6 +62,8 @@ export function GlassTabBar({
 
   const indicatorX = useSharedValue(state.index * tabW);
   const camScale = useSharedValue(1);
+  const pencilOpacity = useSharedValue(0);
+  const pencilY = useSharedValue(10);
 
   useEffect(() => {
     indicatorX.value = withSpring(state.index * tabW, {
@@ -70,12 +73,30 @@ export function GlassTabBar({
     });
   }, [indicatorX, state.index, tabW]);
 
+  function openMenu() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setMenuOpen(true);
+    pencilOpacity.value = withSpring(1, { damping: 18, stiffness: 300 });
+    pencilY.value = withSpring(0, { damping: 18, stiffness: 300 });
+  }
+
+  function closeMenu() {
+    setMenuOpen(false);
+    pencilOpacity.value = withSpring(0, { damping: 20, stiffness: 400 });
+    pencilY.value = withSpring(10, { damping: 20, stiffness: 400 });
+  }
+
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
   }));
 
   const camAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: camScale.value }],
+  }));
+
+  const pencilAnimStyle = useAnimatedStyle(() => ({
+    opacity: pencilOpacity.value,
+    transform: [{ translateY: pencilY.value }],
   }));
 
   return (
@@ -86,6 +107,14 @@ export function GlassTabBar({
         { paddingBottom: BOTTOM_PAD, paddingHorizontal: H_PAD },
       ]}
     >
+      {/* Backdrop — dismisses menu on outside tap */}
+      {menuOpen && (
+        <Pressable
+          style={[styles.backdrop, { height: screenHeight }]}
+          onPress={closeMenu}
+        />
+      )}
+
       <View style={styles.row}>
         {/* ── Tab pill ──────────────────────────────────────────────────── */}
         <View style={[styles.barShadow, { width: tabsWidth, height: BAR_H }]}>
@@ -151,40 +180,76 @@ export function GlassTabBar({
           </BlurView>
         </View>
 
-        {/* ── Camera button ─────────────────────────────────────────────── */}
-        <Animated.View
-          style={[
-            styles.camShadow,
-            { width: CAM_SIZE, height: CAM_SIZE },
-            camAnimStyle,
-          ]}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Log a meal"
-            onPressIn={() => {
-              camScale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
-            }}
-            onPressOut={() => {
-              camScale.value = withSpring(1, { damping: 14, stiffness: 300 });
-            }}
-            onPress={() => {
-              triggerHaptic();
-              router.push("/camera");
-            }}
-            style={styles.camPressable}
+        {/* ── Camera + pencil wrapper ────────────────────────────────────── */}
+        <View style={styles.camWrapper}>
+          {/* Pencil button — appears above on long press */}
+          <Animated.View
+            pointerEvents={menuOpen ? "auto" : "none"}
+            style={[
+              styles.camShadow,
+              styles.pencilBtn,
+              { width: CAM_SIZE, height: CAM_SIZE },
+              pencilAnimStyle,
+            ]}
           >
-            <View style={styles.camBody}>
-              <Ionicons
-                name="camera"
-                size={24}
-                color="rgba(255,255,255,0.92)"
-              />
-            </View>
-            {/* Specular shimmer on the green button */}
-            <View style={styles.camShimmer} pointerEvents="none" />
-          </Pressable>
-        </Animated.View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log manually"
+              onPress={() => {
+                closeMenu();
+                router.push("/manual");
+              }}
+              style={styles.camPressable}
+            >
+              <View style={styles.camBody}>
+                <Ionicons
+                  name="pencil"
+                  size={20}
+                  color="rgba(255,255,255,0.92)"
+                />
+              </View>
+              <View style={styles.camShimmer} pointerEvents="none" />
+            </Pressable>
+          </Animated.View>
+
+          {/* Camera button */}
+          <Animated.View
+            style={[
+              styles.camShadow,
+              { width: CAM_SIZE, height: CAM_SIZE },
+              camAnimStyle,
+            ]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log a meal"
+              onPressIn={() => {
+                if (menuOpen) return;
+                camScale.value = withSpring(0.9, { damping: 16, stiffness: 420 });
+              }}
+              onPressOut={() => {
+                camScale.value = withSpring(1, { damping: 14, stiffness: 300 });
+              }}
+              onPress={() => {
+                if (menuOpen) { closeMenu(); return; }
+                triggerHaptic();
+                router.push("/camera");
+              }}
+              onLongPress={openMenu}
+              delayLongPress={400}
+              style={styles.camPressable}
+            >
+              <View style={styles.camBody}>
+                <Ionicons
+                  name="camera"
+                  size={24}
+                  color="rgba(255,255,255,0.92)"
+                />
+              </View>
+              <View style={styles.camShimmer} pointerEvents="none" />
+            </Pressable>
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -196,6 +261,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+
+  backdrop: {
+    position: "absolute",
+    bottom: 0,
+    left: -H_PAD,
+    right: -H_PAD,
   },
 
   row: {
@@ -267,7 +339,16 @@ const styles = StyleSheet.create({
     color: "#1B1511",
   },
 
-  // ── Camera button ──────────────────────────────────────────────────────────
+  // ── Camera + pencil ────────────────────────────────────────────────────────
+  camWrapper: {
+    width: CAM_SIZE,
+    height: CAM_SIZE,
+  },
+  pencilBtn: {
+    position: "absolute",
+    bottom: CAM_SIZE + 10,
+    left: 0,
+  },
   camShadow: {
     borderRadius: 999,
     shadowColor: GREEN,

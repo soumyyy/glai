@@ -74,25 +74,27 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Greeting row */}
-        <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <Text style={styles.greeting}>{getGreeting(today)}</Text>
-            <Text style={styles.date}>{formatScreenDate(today)}</Text>
+        {/* Two-column header grid */}
+        <View style={styles.headerGrid}>
+          {/* Col 1: greeting + meal badge */}
+          <View style={styles.headerCol1}>
+            <View style={styles.greetingBlock}>
+              <Text style={styles.greeting}>{getGreeting(today)}</Text>
+              <Text style={styles.date}>{formatScreenDate(today)}</Text>
+            </View>
+            <View style={styles.mealBadge}>
+              <Text style={styles.mealBadgeNumber}>{mealCount}</Text>
+              <Text style={styles.mealBadgeLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
+            </View>
           </View>
-          <View style={styles.mealBadge}>
-            <Text style={styles.mealBadgeNumber}>{mealCount}</Text>
-            <Text style={styles.mealBadgeLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
-          </View>
-        </View>
 
-        {/* Hero carb number */}
-        <View style={styles.heroSection}>
-          <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
-          <Text style={styles.carbsNumber}>
-            {carbs}<Text style={styles.carbsUnit}>g</Text>
-          </Text>
-          <View style={styles.carbsUnderline} />
+          {/* Col 2: carbs card */}
+          <View style={styles.carbsCard}>
+            <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
+            <Text style={styles.carbsNumber}>
+              {carbs}<Text style={styles.carbsUnit}>g</Text>
+            </Text>
+          </View>
         </View>
 
         {/* Macro strip */}
@@ -153,13 +155,18 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   content: { paddingHorizontal: 20, gap: 12 },
 
-  // Greeting
-  topRow: {
+  // Header grid
+  headerGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    gap: 12,
+    alignItems: 'stretch',
   },
-  topLeft: { gap: 2 },
+  headerCol1: {
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  greetingBlock: { gap: 2 },
   greeting: {
     fontSize: 24,
     fontWeight: '700',
@@ -179,6 +186,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: 'center',
+    alignSelf: 'flex-start',
     minWidth: 52,
   },
   mealBadgeNumber: {
@@ -195,8 +203,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  // Hero
-  heroSection: { gap: 4 },
+  // Carbs card (col 2)
+  carbsCard: {
+    flex: 0.8,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
   carbsLabel: {
     fontSize: 10,
     letterSpacing: 2,
@@ -204,21 +224,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   carbsNumber: {
-    fontSize: 80,
-    lineHeight: 80,
+    fontSize: 52,
+    lineHeight: 52,
     fontWeight: '700',
     color: Colors.carbs,
-    letterSpacing: -3,
+    letterSpacing: -2,
   },
-  carbsUnit: { fontSize: 38, letterSpacing: -1 },
-  carbsUnderline: {
-    width: 40,
-    height: 3,
-    borderRadius: 999,
-    backgroundColor: Colors.carbs,
-    opacity: 0.3,
-    marginTop: 2,
-  },
+  carbsUnit: { fontSize: 26, letterSpacing: -0.5 },
 
   // Macro strip
   macroStrip: {

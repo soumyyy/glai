@@ -33,6 +33,7 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
       <Stack.Screen name="log" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="manual" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="portion" options={{ presentation: 'modal', title: 'Portion Size' }} />
       <Stack.Screen name="review" options={{ presentation: 'modal', title: 'Review' }} />
       <Stack.Screen name="save-confirmation" options={{ presentation: 'modal', title: 'Save Meal' }} />

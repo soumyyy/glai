@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, useWindowDimensions,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,14 +39,12 @@ export default function PortionScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const isAddMore = mode === 'addmore';
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
   const { draft, setPortion, setAIResults, mergeItems } = useMealStore();
   const [portionSize, setPortionSize] = useState<PortionSize>('full');
   const [analysingStep, setAnalysingStep] = useState<AnalysingStep>(null);
 
   const activeBase64 = isAddMore ? draft.additionalImageBase64 : draft.imageBase64;
   const imageUri = activeBase64 ? `data:image/jpeg;base64,${activeBase64}` : null;
-  const photoHeight = screenHeight * 0.48;
 
   function handlePortionSelect(size: PortionSize, multiplier: number) {
     setPortionSize(size);
@@ -97,7 +95,7 @@ export default function PortionScreen() {
       <View style={{ height: insets.top }} />
 
       {/* Photo */}
-      <View style={[styles.photoWrap, { height: photoHeight }]}>
+      <View style={styles.photoWrap}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
@@ -170,6 +168,7 @@ const styles = StyleSheet.create({
 
   // Photo
   photoWrap: {
+    flex: 1,
     width: '100%',
     backgroundColor: '#111',
     overflow: 'hidden',
@@ -182,7 +181,6 @@ const styles = StyleSheet.create({
   photoPlaceholderText: { color: Colors.textMuted, fontSize: 14 },
   // Portion
   body: {
-    flex: 1,
     paddingHorizontal: 18,
     paddingTop: 14,
     gap: 14,
