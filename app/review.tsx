@@ -87,32 +87,22 @@ export default function ReviewScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 148 }}
       >
-        {/* Photo */}
-        {imageUri ? (
-          <View style={[styles.photoWrap, { height: photoHeight }]}>
-            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            <TouchableOpacity
-              style={[styles.backBtn, { top: insets.top + 14 }]}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.backBtnText}>Back</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={[styles.photoWrap, styles.photoPlaceholder, { height: 80, marginTop: insets.top }]}>
-            <TouchableOpacity style={styles.backBtnDark} onPress={() => router.back()}>
-              <Text style={styles.backBtnDarkText}>Back</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Header strip */}
-        <View style={styles.headerStrip}>
-          <Text style={styles.headerTitle}>Review your meal</Text>
+        {/* Safe area + header strip */}
+        <View style={[styles.headerStrip, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>← Back</Text>
+          </TouchableOpacity>
           <Text style={styles.headerCount}>
             {draft.items.length} item{draft.items.length !== 1 ? 's' : ''}
           </Text>
         </View>
+
+        {/* Photo */}
+        {imageUri ? (
+          <View style={[styles.photoWrap, { height: photoHeight }]}>
+            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          </View>
+        ) : null}
 
         {/* Items list */}
         <View style={styles.list}>
@@ -248,44 +238,23 @@ const styles = StyleSheet.create({
   },
   photoPlaceholder: {
     backgroundColor: Colors.surfaceStrong,
-    paddingHorizontal: 18,
-    justifyContent: 'flex-end',
-    paddingBottom: 12,
   },
-  backBtn: {
-    position: 'absolute',
-    left: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-  },
-  backBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  backBtnDark: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  backBtnDarkText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
 
   // Header strip
   headerStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 4,
+    paddingBottom: 10,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.5,
+  backBtn: {
+    paddingVertical: 4,
+  },
+  backBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   headerCount: {
     fontSize: 13,
