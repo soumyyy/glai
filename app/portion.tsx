@@ -87,7 +87,10 @@ export default function PortionScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Photo — fills top portion of screen */}
+      {/* Safe area spacer so photo starts below status bar */}
+      <View style={{ height: insets.top }} />
+
+      {/* Photo */}
       <View style={[styles.photoWrap, { height: photoHeight }]}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -96,24 +99,17 @@ export default function PortionScreen() {
             <Text style={styles.photoPlaceholderText}>No photo</Text>
           </View>
         )}
-        {/* Retake button overlaid on photo */}
-        <TouchableOpacity
-          style={[styles.retakeBtn, { top: insets.top + 14 }]}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.retakeBtnText}>{isAddMore ? 'Back' : 'Retake'}</Text>
-        </TouchableOpacity>
-        {/* Title overlaid at bottom of photo */}
-        <View style={styles.photoLabel}>
-          <Text style={styles.photoLabelText}>
-            {isAddMore ? 'Another dish' : 'How much did you eat?'}
-          </Text>
-        </View>
       </View>
 
       {/* Portion selector */}
       <View style={styles.body}>
-        <Text style={styles.selectorHint}>Select your portion</Text>
+        {/* Retake + hint in one row */}
+        <View style={styles.bodyTopRow}>
+          <TouchableOpacity style={styles.retakeBtn} onPress={() => router.back()}>
+            <Text style={styles.retakeBtnText}>{isAddMore ? '← Back' : '← Retake'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.selectorHint}>Select portion</Text>
+        </View>
         <View style={styles.portionRow}>
           {PORTIONS.map((opt) => {
             const active = portionSize === opt.size;
@@ -139,27 +135,23 @@ export default function PortionScreen() {
       {/* CTA */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}>
         <TouchableOpacity
-          style={[styles.analyseBtn, analysingStep !== null && styles.analyseBtnDim]}
+          style={[styles.analyseBtn, analysingStep !== null && styles.analyseBtnLoading]}
           onPress={handleAnalyse}
           disabled={analysingStep !== null}
           activeOpacity={0.85}
         >
-          <Text style={styles.analyseBtnText}>Analyse meal</Text>
+          {analysingStep !== null ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
+              <Text style={styles.analyseBtnText}>
+                {analysingStep === 'identifying' ? 'Identifying food…' : 'Estimating nutrition…'}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.analyseBtnText}>Analyse meal</Text>
+          )}
         </TouchableOpacity>
       </View>
-
-      {/* Loading overlay */}
-      {analysingStep !== null ? (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={styles.loadingTitle}>
-            {analysingStep === 'identifying' ? 'Identifying food…' : 'Estimating nutrition…'}
-          </Text>
-          <Text style={styles.loadingStep}>
-            {analysingStep === 'identifying' ? 'Step 1 of 2' : 'Step 2 of 2'}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -182,37 +174,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceStrong,
   },
   photoPlaceholderText: { color: Colors.textMuted, fontSize: 14 },
-  retakeBtn: {
-    position: 'absolute',
-    left: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-  },
-  retakeBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  photoLabel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-  },
-  photoLabelText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-
   // Portion
   body: {
     flex: 1,
     paddingHorizontal: 18,
-    paddingTop: 20,
+    paddingTop: 14,
     gap: 14,
+  },
+  bodyTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  retakeBtn: {
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+  },
+  retakeBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   selectorHint: {
     fontSize: 12,
@@ -267,7 +248,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  analyseBtnDim: { opacity: 0.55 },
+  analyseBtnLoading: {
+    backgroundColor: Colors.primary,
+    opacity: 0.82,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   analyseBtnText: {
     color: '#fff',
     fontSize: 16,
@@ -275,23 +264,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // Loading
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-  },
-  loadingTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  loadingStep: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontWeight: '500',
-  },
 });
