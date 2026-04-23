@@ -4,13 +4,11 @@ import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
-import { MacroCard } from '../../components/MacroCard';
 import { MealListItem } from '../../components/MealListItem';
 import { Colors } from '../../constants/colors';
 import { formatLocalDate } from '../../lib/date';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
 import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries';
-import { hasSupabaseConfig } from '../../lib/config';
 
 function getGreeting(now: Date) {
   const hour = now.getHours();
@@ -40,17 +38,17 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!isFocused) return;
-
     const today = formatLocalDate(new Date());
     setSummary(getSummaryForDate(today));
     setMeals(getMealsForDate(today).reverse());
   }, [isFocused]);
 
   const today = new Date();
-  const totalCarbs = summary ? `${whole(summary.total_carbs_g)}g` : '0g';
-  const totalProtein = summary ? `${whole(summary.total_protein_g)}g` : '0g';
-  const totalFat = summary ? `${whole(summary.total_fat_g)}g` : '0g';
-  const totalCalories = summary ? `${whole(summary.total_calories_kcal)}` : '0';
+  const carbs = summary ? whole(summary.total_carbs_g) : '0';
+  const protein = summary ? whole(summary.total_protein_g) : '0';
+  const fat = summary ? whole(summary.total_fat_g) : '0';
+  const calories = summary ? whole(summary.total_calories_kcal) : '0';
+  const mealCount = summary?.meal_count ?? 0;
 
   return (
     <View style={styles.screen}>
@@ -63,53 +61,48 @@ export default function HomeScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Text style={styles.overline}>DAILY CHECK-IN</Text>
-          <Text style={styles.title}>{getGreeting(today)}</Text>
-          <Text style={styles.subtitle}>{formatScreenDate(today)}</Text>
-
-          <View style={styles.heroCard}>
-            <View style={styles.heroCardTop}>
-              <View>
-                <Text style={styles.heroCardLabel}>Today&apos;s balance</Text>
-                <Text style={styles.heroCarbs}>{totalCarbs}</Text>
-              </View>
-              <View style={styles.heroBadge}>
-                <Text style={styles.heroBadgeText}>
-                  {summary?.meal_count ?? 0} meal{summary?.meal_count === 1 ? '' : 's'}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.heroCopy}>
-              Range-based nutrition tracking for meals you have already confirmed.
-            </Text>
-
-            <View style={styles.statusRow}>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>Local-first logs</Text>
-              </View>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>
-                  {hasSupabaseConfig() ? 'Cloud sync ready' : 'Local mode'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.grid}>
-          <MacroCard label="Carbs" value={totalCarbs} color={Colors.carbs} />
-          <MacroCard label="Protein" value={totalProtein} color={Colors.protein} />
-          <MacroCard label="Fat" value={totalFat} color={Colors.fat} />
-          <MacroCard label="Calories" value={totalCalories} color={Colors.calories} />
-        </View>
-
-        <View style={styles.sectionHeader}>
+        {/* Date + greeting */}
+        <View style={styles.topRow}>
           <View>
-            <Text style={styles.sectionTitle}>Logged today</Text>
-            <Text style={styles.sectionCaption}>Your most recent meals stay one tap away.</Text>
+            <Text style={styles.overline}>DAILY CHECK-IN</Text>
+            <Text style={styles.greeting}>{getGreeting(today)}</Text>
+            <Text style={styles.date}>{formatScreenDate(today)}</Text>
           </View>
+          <View style={styles.mealCountBadge}>
+            <Text style={styles.mealCountNumber}>{mealCount}</Text>
+            <Text style={styles.mealCountLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
+          </View>
+        </View>
+
+        {/* Hero: carb number */}
+        <View style={styles.heroSection}>
+          <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
+          <Text style={styles.carbsNumber}>{carbs}<Text style={styles.carbsUnit}>g</Text></Text>
+          <View style={styles.carbsUnderline} />
+        </View>
+
+        {/* Secondary macros strip */}
+        <View style={styles.macroStrip}>
+          <View style={styles.macroStripItem}>
+            <Text style={[styles.macroStripValue, { color: Colors.protein }]}>{protein}g</Text>
+            <Text style={styles.macroStripLabel}>Protein</Text>
+          </View>
+          <View style={styles.macroStripDivider} />
+          <View style={styles.macroStripItem}>
+            <Text style={[styles.macroStripValue, { color: Colors.fat }]}>{fat}g</Text>
+            <Text style={styles.macroStripLabel}>Fat</Text>
+          </View>
+          <View style={styles.macroStripDivider} />
+          <View style={styles.macroStripItem}>
+            <Text style={[styles.macroStripValue, { color: Colors.calories }]}>{calories}</Text>
+            <Text style={styles.macroStripLabel}>kcal</Text>
+          </View>
+        </View>
+
+        {/* Meals section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Logged today</Text>
+          <Text style={styles.sectionCaption}>Most recent meals, tap to expand.</Text>
         </View>
 
         {meals.length > 0 ? (
@@ -122,10 +115,15 @@ export default function HomeScreen() {
           ))
         ) : (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Nothing logged yet today.</Text>
-            <Text style={styles.emptyCopy}>
-              Use the camera to analyse a meal and Glai will build the rest of the record.
-            </Text>
+            <View style={styles.emptyIconRing}>
+              <View style={styles.emptyIconInner} />
+            </View>
+            <View style={styles.emptyText}>
+              <Text style={styles.emptyTitle}>Nothing logged yet today.</Text>
+              <Text style={styles.emptyCopy}>
+                Use the camera to photograph a meal. Glai identifies the food and builds the nutrition record.
+              </Text>
+            </View>
             <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/camera')}>
               <Text style={styles.emptyButtonText}>Open camera</Text>
             </TouchableOpacity>
@@ -143,127 +141,186 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    gap: 18,
+    gap: 20,
   },
-  hero: {
-    gap: 10,
-  },
-  overline: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  title: {
-    fontSize: 38,
-    lineHeight: 42,
-    color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1.4,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-  },
-  heroCard: {
-    marginTop: 8,
-    backgroundColor: Colors.surface,
-    borderRadius: 30,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 18,
-  },
-  heroCardTop: {
+
+  // Top row
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
   },
-  heroCardLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+  overline: {
+    fontSize: 11,
+    letterSpacing: 1.8,
+    color: Colors.textMuted,
     fontWeight: '700',
+    marginBottom: 6,
   },
-  heroCarbs: {
-    marginTop: 8,
-    fontSize: 48,
-    lineHeight: 52,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -2,
-  },
-  heroBadge: {
-    backgroundColor: Colors.surfaceStrong,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  heroBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  heroCopy: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.textSecondary,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: Colors.surfaceStrong,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  statusPillText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  sectionHeader: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 23,
+  greeting: {
+    fontSize: 26,
     fontWeight: '700',
     color: Colors.text,
     letterSpacing: -0.8,
+    lineHeight: 30,
+  },
+  date: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 3,
+  },
+  mealCountBadge: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    minWidth: 56,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+  },
+  mealCountNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.5,
+  },
+  mealCountLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+
+  // Hero carb number
+  heroSection: {
+    paddingVertical: 8,
+    gap: 6,
+  },
+  carbsLabel: {
+    fontSize: 11,
+    letterSpacing: 2,
+    color: Colors.textMuted,
+    fontWeight: '700',
+  },
+  carbsNumber: {
+    fontSize: 88,
+    lineHeight: 88,
+    fontWeight: '700',
+    color: Colors.carbs,
+    letterSpacing: -4,
+  },
+  carbsUnit: {
+    fontSize: 42,
+    letterSpacing: -2,
+    color: Colors.carbs,
+  },
+  carbsUnderline: {
+    width: 48,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: Colors.carbs,
+    opacity: 0.35,
+    marginTop: 4,
+  },
+
+  // Macro strip
+  macroStrip: {
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    paddingVertical: 16,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+  },
+  macroStripItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  macroStripDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+  },
+  macroStripValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+  },
+  macroStripLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // Section
+  sectionHeader: {
+    gap: 3,
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.7,
   },
   sectionCaption: {
-    marginTop: 4,
+    fontSize: 13,
     color: Colors.textSecondary,
-    fontSize: 14,
   },
+
+  // Empty state
   emptyCard: {
     backgroundColor: Colors.surface,
     borderRadius: 28,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 22,
-    gap: 12,
+    padding: 24,
+    gap: 16,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+  },
+  emptyIconRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIconInner: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2.5,
+    borderColor: Colors.textMuted,
+  },
+  emptyText: {
+    gap: 6,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '700',
     color: Colors.text,
+    letterSpacing: -0.4,
   },
   emptyCopy: {
     fontSize: 14,
@@ -272,15 +329,15 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     alignSelf: 'flex-start',
-    marginTop: 8,
     backgroundColor: Colors.primary,
     borderRadius: 999,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   emptyButtonText: {
-    color: Colors.surfaceStrong,
+    color: '#fff',
     fontWeight: '700',
-    letterSpacing: 0.4,
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
 });

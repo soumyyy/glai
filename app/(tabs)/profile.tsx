@@ -1,23 +1,72 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
 import { Colors } from '../../constants/colors';
 import { LOCAL_USER } from '../../constants/user';
 import { getOpenAIConfig, hasSupabaseConfig } from '../../lib/config';
+import { exportMealsCSV } from '../../lib/export';
+import { getDb } from '../../lib/db/schema';
 
 function isOpenAIConfigured() {
-  try {
-    getOpenAIConfig();
-    return true;
-  } catch {
-    return false;
-  }
+  try { getOpenAIConfig(); return true; } catch { return false; }
+}
+
+function clearAllData() {
+  const db = getDb();
+  db.execSync('DELETE FROM meal_items; DELETE FROM meals; DELETE FROM daily_summaries;');
 }
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const openAIConfigured = isOpenAIConfigured();
   const supabaseConfigured = hasSupabaseConfig();
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportMealsCSV();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Export failed.';
+      Alert.alert('Export failed', msg);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function handleClearAll() {
+    Alert.alert(
+      'Clear all data?',
+      'This permanently deletes every meal, item, and daily summary from this device. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete everything',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'All your logged meals will be gone. Your Supabase cloud data is not affected.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, clear everything',
+                  style: 'destructive',
+                  onPress: clearAllData,
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }
+
+  const initial = LOCAL_USER.name.slice(0, 1).toUpperCase();
 
   return (
     <View style={styles.screen}>
@@ -30,79 +79,94 @@ export default function ProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.overline}>PROFILE</Text>
-          <Text style={styles.title}>Single-user setup, ready to scale</Text>
-          <Text style={styles.subtitle}>
-            The product stays simple in v1, but the data model is already prepared for more.
-          </Text>
+          <Text style={styles.title}>Your health record</Text>
         </View>
 
+        {/* Identity card */}
         <View style={styles.identityCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{LOCAL_USER.name.slice(0, 1).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <View style={styles.identityText}>
+          <View style={styles.identityBody}>
             <Text style={styles.identityName}>{LOCAL_USER.name}</Text>
-            <Text style={styles.identityMeta}>Local profile stored on-device</Text>
+            <Text style={styles.identityMeta}>Local profile · single-user v1</Text>
+            <View style={styles.identityStats}>
+              <View style={styles.identityStat}>
+                <Text style={styles.identityStatValue}>{LOCAL_USER.age}</Text>
+                <Text style={styles.identityStatLabel}>Age</Text>
+              </View>
+              <View style={styles.identityStatDivider} />
+              <View style={styles.identityStat}>
+                <Text style={styles.identityStatValue}>{LOCAL_USER.weight_kg}kg</Text>
+                <Text style={styles.identityStatLabel}>Weight</Text>
+              </View>
+              <View style={styles.identityStatDivider} />
+              <View style={styles.identityStat}>
+                <Text style={styles.identityStatValue}>Metric</Text>
+                <Text style={styles.identityStatLabel}>Units</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Age</Text>
-            <Text style={styles.metricValue}>{LOCAL_USER.age}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Weight</Text>
-            <Text style={styles.metricValue}>{LOCAL_USER.weight_kg}kg</Text>
-          </View>
-        </View>
-
+        {/* Backend status */}
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Backend status</Text>
-          <View style={styles.statusList}>
-            <View style={styles.statusRow}>
+          <Text style={styles.panelTitle}>Connections</Text>
+          <View style={styles.statusItem}>
+            <View style={[styles.statusDot, openAIConfigured ? styles.dotGreen : styles.dotAmber]} />
+            <View style={styles.statusText}>
               <Text style={styles.statusName}>OpenAI meal analysis</Text>
-              <View style={[styles.statusBadge, openAIConfigured ? styles.good : styles.dim]}>
-                <Text style={styles.statusBadgeText}>
-                  {openAIConfigured ? 'Connected' : 'Missing key'}
-                </Text>
-              </View>
+              <Text style={styles.statusDetail}>{openAIConfigured ? 'Connected · GPT-4o Vision' : 'Missing API key'}</Text>
             </View>
-            <View style={styles.statusRow}>
+          </View>
+          <View style={styles.statusDivider} />
+          <View style={styles.statusItem}>
+            <View style={[styles.statusDot, supabaseConfigured ? styles.dotGreen : styles.dotGrey]} />
+            <View style={styles.statusText}>
               <Text style={styles.statusName}>Supabase cloud sync</Text>
-              <View style={[styles.statusBadge, supabaseConfigured ? styles.good : styles.dim]}>
-                <Text style={styles.statusBadgeText}>
-                  {supabaseConfigured ? 'Connected' : 'Local only'}
-                </Text>
-              </View>
+              <Text style={styles.statusDetail}>{supabaseConfigured ? 'Connected · syncing in background' : 'Local-only mode'}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Current defaults</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Units</Text>
-            <Text style={styles.detailValue}>Metric</Text>
+        {/* Export */}
+        <TouchableOpacity
+          style={styles.exportCard}
+          onPress={handleExport}
+          disabled={exporting}
+          activeOpacity={0.78}
+        >
+          <View style={styles.exportLeft}>
+            <View style={styles.exportIcon}>
+              <View style={styles.exportIconArrow} />
+            </View>
+            <View>
+              <Text style={styles.exportTitle}>Export to CSV</Text>
+              <Text style={styles.exportSubtitle}>All meals · all macros · carb ranges</Text>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Meal logging</Text>
-            <Text style={styles.detailValue}>Photo required</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Nutrition source</Text>
-            <Text style={styles.detailValue}>OpenAI vision</Text>
-          </View>
-        </View>
+          {exporting ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : (
+            <View style={styles.exportChevron}>
+              <View style={styles.exportChevronLine1} />
+              <View style={styles.exportChevronLine2} />
+            </View>
+          )}
+        </TouchableOpacity>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Next layers</Text>
-          <Text style={styles.panelCopy}>
-            Export, clearer data controls, and multi-user auth can sit on top of the current
-            schema without reworking the meal model.
+        {/* Danger zone */}
+        <View style={styles.dangerPanel}>
+          <Text style={styles.dangerTitle}>Danger zone</Text>
+          <Text style={styles.dangerCopy}>
+            Clears all local meal data from this device. Your cloud data in Supabase is not affected.
           </Text>
+          <TouchableOpacity style={styles.dangerButton} onPress={handleClearAll} activeOpacity={0.78}>
+            <Text style={styles.dangerButtonText}>Clear all local data</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -119,12 +183,12 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   header: {
-    gap: 8,
+    gap: 6,
   },
   overline: {
-    fontSize: 12,
+    fontSize: 11,
     letterSpacing: 1.8,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     fontWeight: '700',
   },
   title: {
@@ -134,73 +198,81 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1.4,
   },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.textSecondary,
-  },
+
+  // Identity card
   identityCard: {
     backgroundColor: Colors.surface,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: Colors.border,
     padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    gap: 18,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
+    width: 80,
+    height: 80,
+    borderRadius: 26,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
   },
   avatarText: {
-    fontSize: 28,
-    color: Colors.surfaceStrong,
+    fontSize: 32,
     fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.5,
   },
-  identityText: {
-    flex: 1,
-    gap: 6,
+  identityBody: {
+    gap: 10,
   },
   identityName: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: Colors.text,
+    letterSpacing: -0.8,
   },
   identityMeta: {
+    fontSize: 13,
     color: Colors.textSecondary,
-    fontSize: 14,
   },
-  metricsRow: {
+  identityStats: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    marginTop: 4,
   },
-  metricCard: {
+  identityStat: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 18,
-    gap: 8,
+    gap: 2,
   },
-  metricLabel: {
-    fontSize: 12,
-    letterSpacing: 1.2,
-    color: Colors.textSecondary,
+  identityStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Colors.border,
+    marginHorizontal: 12,
+  },
+  identityStatValue: {
+    fontSize: 17,
     fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  metricValue: {
-    fontSize: 28,
     color: Colors.text,
-    fontWeight: '700',
-    letterSpacing: -1,
+    letterSpacing: -0.3,
   },
+  identityStatLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+
+  // Connections panel
   panel: {
     backgroundColor: Colors.surface,
     borderRadius: 28,
@@ -208,61 +280,153 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     padding: 20,
     gap: 16,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
   },
   panelTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.6,
+    letterSpacing: -0.4,
   },
-  panelCopy: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: Colors.textSecondary,
-  },
-  statusList: {
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 14,
   },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    alignItems: 'center',
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
   },
+  dotGreen: { backgroundColor: Colors.success },
+  dotAmber: { backgroundColor: Colors.warning },
+  dotGrey: { backgroundColor: Colors.textMuted },
+  statusText: { flex: 1, gap: 2 },
   statusName: {
-    flex: 1,
     fontSize: 15,
-    color: Colors.text,
     fontWeight: '600',
+    color: Colors.text,
   },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  good: {
-    backgroundColor: Colors.success + '18',
-  },
-  dim: {
-    backgroundColor: Colors.surfaceStrong,
-  },
-  statusBadgeText: {
+  statusDetail: {
     fontSize: 12,
     color: Colors.textSecondary,
-    fontWeight: '700',
   },
-  detailRow: {
+  statusDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+
+  // Export card
+  exportCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 16,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+  },
+  exportLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+  },
+  exportIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: Colors.primary + '14',
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportIconArrow: {
+    width: 16,
+    height: 16,
+    borderTopWidth: 2.5,
+    borderRightWidth: 2.5,
+    borderColor: Colors.primary,
+    transform: [{ rotate: '45deg' }],
+    marginLeft: -4,
+  },
+  exportTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  exportSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  exportChevron: {
+    width: 10,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportChevronLine1: {
+    position: 'absolute',
+    width: 9,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.textMuted,
+    transform: [{ rotate: '45deg' }, { translateY: -3 }],
+  },
+  exportChevronLine2: {
+    position: 'absolute',
+    width: 9,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.textMuted,
+    transform: [{ rotate: '-45deg' }, { translateY: 3 }],
+  },
+
+  // Danger zone
+  dangerPanel: {
+    backgroundColor: Colors.error + '08',
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.error + '25',
+    padding: 20,
     gap: 12,
   },
-  detailLabel: {
-    color: Colors.textSecondary,
-    fontSize: 14,
+  dangerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.error,
+    letterSpacing: -0.2,
   },
-  detailValue: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
+  dangerCopy: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.textSecondary,
+  },
+  dangerButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: Colors.error + '50',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: Colors.error + '0C',
+  },
+  dangerButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.error,
   },
 });
