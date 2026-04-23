@@ -28,7 +28,7 @@ export default function CameraScreen() {
       router.push('/portion?mode=addmore');
     } else {
       setImage(base64);
-      router.push('/portion');
+      router.push('/log');
     }
   }
 

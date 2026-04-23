@@ -19,15 +19,11 @@ function getGreeting(now: Date) {
 
 function formatScreenDate(date: Date) {
   return new Intl.DateTimeFormat(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long',
   }).format(date);
 }
 
-function whole(value: number) {
-  return Math.round(value).toString();
-}
+function whole(value: number) { return Math.round(value).toString(); }
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -44,10 +40,10 @@ export default function HomeScreen() {
   }, [isFocused]);
 
   const today = new Date();
-  const carbs = summary ? whole(summary.total_carbs_g) : '0';
-  const protein = summary ? whole(summary.total_protein_g) : '0';
-  const fat = summary ? whole(summary.total_fat_g) : '0';
-  const calories = summary ? whole(summary.total_calories_kcal) : '0';
+  const carbs   = summary ? whole(summary.total_carbs_g)        : '—';
+  const protein = summary ? whole(summary.total_protein_g)      : '—';
+  const fat     = summary ? whole(summary.total_fat_g)          : '—';
+  const calories = summary ? whole(summary.total_calories_kcal) : '—';
   const mealCount = summary?.meal_count ?? 0;
 
   return (
@@ -57,52 +53,54 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 22, paddingBottom: insets.bottom + 132 },
+          { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 132 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Date + greeting */}
+        {/* Greeting row */}
         <View style={styles.topRow}>
-          <View>
-            <Text style={styles.overline}>DAILY CHECK-IN</Text>
+          <View style={styles.topLeft}>
             <Text style={styles.greeting}>{getGreeting(today)}</Text>
             <Text style={styles.date}>{formatScreenDate(today)}</Text>
           </View>
-          <View style={styles.mealCountBadge}>
-            <Text style={styles.mealCountNumber}>{mealCount}</Text>
-            <Text style={styles.mealCountLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
+          <View style={styles.mealBadge}>
+            <Text style={styles.mealBadgeNumber}>{mealCount}</Text>
+            <Text style={styles.mealBadgeLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
           </View>
         </View>
 
-        {/* Hero: carb number */}
+        {/* Hero carb number */}
         <View style={styles.heroSection}>
-          <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
-          <Text style={styles.carbsNumber}>{carbs}<Text style={styles.carbsUnit}>g</Text></Text>
+          <Text style={styles.carbsLabel}>TODAY'S CARBS</Text>
+          <Text style={styles.carbsNumber}>
+            {carbs}<Text style={styles.carbsUnit}>g</Text>
+          </Text>
           <View style={styles.carbsUnderline} />
         </View>
 
-        {/* Secondary macros strip */}
+        {/* Macro strip */}
         <View style={styles.macroStrip}>
-          <View style={styles.macroStripItem}>
-            <Text style={[styles.macroStripValue, { color: Colors.protein }]}>{protein}g</Text>
-            <Text style={styles.macroStripLabel}>Protein</Text>
-          </View>
-          <View style={styles.macroStripDivider} />
-          <View style={styles.macroStripItem}>
-            <Text style={[styles.macroStripValue, { color: Colors.fat }]}>{fat}g</Text>
-            <Text style={styles.macroStripLabel}>Fat</Text>
-          </View>
-          <View style={styles.macroStripDivider} />
-          <View style={styles.macroStripItem}>
-            <Text style={[styles.macroStripValue, { color: Colors.calories }]}>{calories}</Text>
-            <Text style={styles.macroStripLabel}>kcal</Text>
-          </View>
+          {[
+            { label: 'Protein', value: `${protein}g`, color: Colors.protein },
+            { label: 'Fat',     value: `${fat}g`,     color: Colors.fat },
+            { label: 'kcal',    value: calories,       color: Colors.calories },
+          ].map((m, i, arr) => (
+            <View key={m.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              {i > 0 && <View style={styles.macroDiv} />}
+              <View style={styles.macroItem}>
+                <Text style={[styles.macroValue, { color: m.color }]}>{m.value}</Text>
+                <Text style={styles.macroLabel}>{m.label}</Text>
+              </View>
+            </View>
+          ))}
         </View>
 
-        {/* Meals section */}
+        {/* Meals list */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Logged today</Text>
-          <Text style={styles.sectionCaption}>Most recent meals, tap to expand.</Text>
+          {mealCount > 0 && (
+            <Text style={styles.sectionMeta}>{mealCount} meal{mealCount === 1 ? '' : 's'}</Text>
+          )}
         </View>
 
         {meals.length > 0 ? (
@@ -118,10 +116,10 @@ export default function HomeScreen() {
             <View style={styles.emptyIconRing}>
               <View style={styles.emptyIconInner} />
             </View>
-            <View style={styles.emptyText}>
-              <Text style={styles.emptyTitle}>Nothing logged yet today.</Text>
+            <View style={styles.emptyTextBlock}>
+              <Text style={styles.emptyTitle}>Nothing logged yet.</Text>
               <Text style={styles.emptyCopy}>
-                Use the camera to photograph a meal. Glai identifies the food and builds the nutrition record.
+                Photograph a meal — Glai identifies the food and estimates carbs automatically.
               </Text>
             </View>
             <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/camera')}>
@@ -135,133 +133,90 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    gap: 20,
-  },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: 20, gap: 12 },
 
-  // Top row
+  // Greeting
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
   },
-  overline: {
-    fontSize: 11,
-    letterSpacing: 1.8,
-    color: Colors.textMuted,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
+  topLeft: { gap: 2 },
   greeting: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.8,
-    lineHeight: 30,
+    letterSpacing: -0.6,
   },
   date: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
-    marginTop: 3,
+    fontWeight: '400',
   },
-  mealCountBadge: {
+  mealBadge: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: 'center',
-    minWidth: 56,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    minWidth: 52,
   },
-  mealCountNumber: {
-    fontSize: 22,
+  mealBadgeNumber: {
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
-  mealCountLabel: {
-    fontSize: 10,
+  mealBadgeLabel: {
+    fontSize: 9,
     color: Colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginTop: 1,
   },
 
-  // Hero carb number
-  heroSection: {
-    paddingVertical: 8,
-    gap: 6,
-  },
+  // Hero
+  heroSection: { gap: 4 },
   carbsLabel: {
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 2,
     color: Colors.textMuted,
     fontWeight: '700',
   },
   carbsNumber: {
-    fontSize: 88,
-    lineHeight: 88,
+    fontSize: 80,
+    lineHeight: 80,
     fontWeight: '700',
     color: Colors.carbs,
-    letterSpacing: -4,
+    letterSpacing: -3,
   },
-  carbsUnit: {
-    fontSize: 42,
-    letterSpacing: -2,
-    color: Colors.carbs,
-  },
+  carbsUnit: { fontSize: 38, letterSpacing: -1 },
   carbsUnderline: {
-    width: 48,
-    height: 4,
+    width: 40,
+    height: 3,
     borderRadius: 999,
     backgroundColor: Colors.carbs,
-    opacity: 0.35,
-    marginTop: 4,
+    opacity: 0.3,
+    marginTop: 2,
   },
 
   // Macro strip
   macroStrip: {
     backgroundColor: Colors.surface,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
     flexDirection: 'row',
-    paddingVertical: 16,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    paddingVertical: 12,
   },
-  macroStripItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  macroStripDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-  },
-  macroStripValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-  },
-  macroStripLabel: {
-    fontSize: 10,
+  macroItem: { flex: 1, alignItems: 'center', gap: 3 },
+  macroDiv: { width: 1, height: 24, backgroundColor: Colors.border, alignSelf: 'center' },
+  macroValue: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  macroLabel: {
+    fontSize: 9,
     color: Colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -270,74 +225,71 @@ const styles = StyleSheet.create({
 
   // Section
   sectionHeader: {
-    gap: 3,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     marginTop: 4,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.7,
+    letterSpacing: -0.5,
   },
-  sectionCaption: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+  sectionMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '500',
   },
 
   // Empty state
   emptyCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 24,
-    gap: 16,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
+    padding: 20,
+    gap: 14,
   },
   emptyIconRing: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyIconInner: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2.5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
     borderColor: Colors.textMuted,
   },
-  emptyText: {
-    gap: 6,
-  },
+  emptyTextBlock: { gap: 4 },
   emptyTitle: {
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.text,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   emptyCopy: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 19,
     color: Colors.textSecondary,
   },
   emptyButton: {
     alignSelf: 'flex-start',
     backgroundColor: Colors.primary,
     borderRadius: 999,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   emptyButtonText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 14,
-    letterSpacing: 0.3,
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
 });
