@@ -3,7 +3,7 @@
     "name": "glai",
     "slug": "glai",
     "owner": "soumymaheshwri",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "glai",
@@ -48,14 +48,7 @@
         }
       ],
       "expo-sqlite",
-      "expo-secure-store",
-      [
-        "@kingstinct/react-native-healthkit",
-        {
-          "NSHealthShareUsageDescription": "Glai reads blood glucose data from Apple Health so future CGM-linked meal context can work on this device.",
-          "NSHealthUpdateUsageDescription": "Glai may write health data to Apple Health only if you choose to enable that in a future release."
-        }
-      ]
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,7 +1,7 @@
 {
   "name": "glai",
   "main": "expo-router/entry",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
-    "@kingstinct/react-native-healthkit": "^14.0.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
@@ -52,7 +51,6 @@
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-gifted-charts": "^1.4.76",
-    "react-native-nitro-modules": "^0.35.5",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",

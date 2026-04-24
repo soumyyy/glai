@@ -92,16 +92,9 @@ npm run update:production -- --message "Describe the change"
 
 EAS will prompt for Apple Developer credentials, App Store Connect access, signing credentials, and the App Store app record on first setup.
 
-## HealthKit / CGM prep
+## HealthKit / CGM note
 
-The repo now includes `@kingstinct/react-native-healthkit` for iOS HealthKit access. This prepares the next iPhone build to read blood glucose samples already available in Apple Health.
-
-Important limits:
-
-- this does not guarantee direct FreeStyle Libre sensor connectivity
-- Expo Go will not support this native module
-- you need a new iOS build for the HealthKit native dependency to exist in the app
-- whether Libre data is available to Glai depends on what the Libre app exposes to Apple Health on-device
+Direct CGM or HealthKit integration is not currently shipped in the app binary. That work was deferred until the base TestFlight line is stable again.
 
 ## Backend architecture
 
