@@ -47,7 +47,7 @@ export async function syncAllProfiles(): Promise<void> {
 }
 
 // Pull all profiles from Supabase, upsert locally, return all user_ids
-async function restoreAllProfiles(): Promise<string[]> {
+export async function restoreAllProfiles(): Promise<string[]> {
   const supabase = getSupabaseClient();
   if (!supabase) return getAllProfiles().map(p => p.id);
 

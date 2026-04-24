@@ -52,7 +52,7 @@ export default function ManualEntryScreen() {
       setProtein(String(Math.round(result.protein_g)));
       setFat(String(Math.round(result.fat_g)));
       setCalories(String(Math.round(result.calories_kcal)));
-    } catch (err) {
+    } catch {
       Alert.alert('Could not autofill', 'Check your connection and try again.');
     } finally {
       setAutofilling(false);

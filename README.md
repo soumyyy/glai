@@ -59,6 +59,7 @@ The project is configured for EAS iOS builds:
 - iOS bundle identifier: `com.soumymaheshwri.glai`
 - production build profile: `eas build --platform ios --profile production`
 - production submit profile: `eas submit --platform ios --profile production`
+- production OTA script: `npm run update:production -- --message "..."`
 
 Before the first TestFlight build, make sure the EAS project is linked and the build-time environment variables exist in EAS:
 
@@ -83,7 +84,24 @@ Or build and submit automatically:
 npm run build-submit:ios
 ```
 
+Publish production OTA updates with the production EAS environment:
+
+```bash
+npm run update:production -- --message "Describe the change"
+```
+
 EAS will prompt for Apple Developer credentials, App Store Connect access, signing credentials, and the App Store app record on first setup.
+
+## HealthKit / CGM prep
+
+The repo now includes `@kingstinct/react-native-healthkit` for iOS HealthKit access. This prepares the next iPhone build to read blood glucose samples already available in Apple Health.
+
+Important limits:
+
+- this does not guarantee direct FreeStyle Libre sensor connectivity
+- Expo Go will not support this native module
+- you need a new iOS build for the HealthKit native dependency to exist in the app
+- whether Libre data is available to Glai depends on what the Libre app exposes to Apple Health on-device
 
 ## Backend architecture
 

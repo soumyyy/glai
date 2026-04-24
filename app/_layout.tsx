@@ -1,18 +1,25 @@
 import 'react-native-url-polyfill/auto';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { useCameraPermissions } from 'expo-camera';
 import { AppState } from 'react-native';
 import { syncAndRestoreCloudMeals } from '../lib/supabase/sync';
+import { getSetting } from '../lib/db/settings';
 
 export default function RootLayout() {
   const [, requestPermission] = useCameraPermissions();
+  const router = useRouter();
 
   useEffect(() => {
     requestPermission();
   }, [requestPermission]);
 
   useEffect(() => {
+    if (!getSetting('onboarded')) {
+      router.replace('/onboarding');
+      return;
+    }
+
     syncAndRestoreCloudMeals().catch((error) => {
       console.warn('[Restore] startup sync failed', error);
     });
@@ -26,10 +33,11 @@ export default function RootLayout() {
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [router]);
 
   return (
     <Stack>
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
       <Stack.Screen name="log" options={{ presentation: 'modal', headerShown: false }} />
