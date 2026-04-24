@@ -1,4 +1,3 @@
-import { LOCAL_USER, LOCAL_USER_ID } from '../../constants/user';
 import { getSummaryForDate, upsertCloudDailySummary, type DailySummaryRow } from '../db/summaries';
 import {
   getUnsynced,
@@ -11,6 +10,8 @@ import {
   type MealItemRow,
   type MealRow,
 } from '../db/meals';
+import { getAllProfiles, upsertCloudProfile, type UserRow } from '../db/users';
+import { useProfileStore } from '../store/profileStore';
 import { useSyncStore } from '../store/syncStore';
 import { getSupabaseClient } from './client';
 
@@ -25,18 +26,48 @@ function describeError(error: unknown): string {
   return JSON.stringify(error);
 }
 
-async function ensureCloudUser(): Promise<void> {
+// Push all local profiles to Supabase
+export async function syncAllProfiles(): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
 
-  const { error } = await supabase.from('users').upsert(
-    {
-      ...LOCAL_USER,
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' },
-  );
+  const profiles = getAllProfiles();
+  for (const profile of profiles) {
+    const { error } = await supabase.from('users').upsert({
+      id:                    profile.id,
+      name:                  profile.name,
+      age:                   profile.age ?? null,
+      weight_kg:             profile.weight_kg ?? null,
+      insulin_to_carb_ratio: profile.insulin_to_carb_ratio ?? null,
+      created_at:            profile.created_at,
+    }, { onConflict: 'id' });
+    if (error) console.warn('[Sync] profile:push:failed', { id: profile.id, error: describeError(error) });
+    else console.log('[Sync] profile:push:done', { id: profile.id, name: profile.name });
+  }
+}
+
+// Pull all profiles from Supabase, upsert locally, return all user_ids
+async function restoreAllProfiles(): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return getAllProfiles().map(p => p.id);
+
+  const { data, error } = await supabase.from('users').select('*');
   if (error) throw error;
+
+  const rows = (data ?? []) as Record<string, unknown>[];
+  for (const row of rows) {
+    upsertCloudProfile({
+      id:                    String(row.id),
+      name:                  String(row.name),
+      age:                   row.age != null ? Number(row.age) : null,
+      weight_kg:             row.weight_kg != null ? Number(row.weight_kg) : null,
+      insulin_to_carb_ratio: row.insulin_to_carb_ratio != null ? Number(row.insulin_to_carb_ratio) : null,
+      created_at:            String(row.created_at),
+    });
+  }
+
+  console.log('[Sync] profiles:restored', { count: rows.length });
+  return rows.map(r => String(r.id));
 }
 
 export async function syncPendingMeals(): Promise<void> {
@@ -56,7 +87,7 @@ export async function syncPendingMeals(): Promise<void> {
 
   console.log('[Sync] start', { upserts: unsynced.length, deletes: pendingDeletes.length });
 
-  await ensureCloudUser();
+  await syncAllProfiles();
 
   // ── upserts ──────────────────────────────────────────────────────────────────
 
@@ -186,19 +217,20 @@ function normalizeSummary(row: Record<string, unknown>): DailySummaryRow {
   };
 }
 
-export async function restoreCloudMeals(): Promise<{ meals: number; items: number; summaries: number }> {
+export async function restoreCloudMeals(userIds?: string[]): Promise<{ meals: number; items: number; summaries: number }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
     console.log('[Restore] skipped:no-client');
     return { meals: 0, items: 0, summaries: 0 };
   }
 
-  console.log('[Restore] start', { userId: LOCAL_USER_ID });
+  const ids = userIds ?? getAllProfiles().map(p => p.id);
+  console.log('[Restore] start', { userIds: ids });
 
   const { data: mealsData, error: mealsError } = await supabase
     .from('meals')
     .select('*')
-    .eq('user_id', LOCAL_USER_ID)
+    .in('user_id', ids)
     .order('created_at', { ascending: true });
   if (mealsError) throw mealsError;
 
@@ -218,7 +250,7 @@ export async function restoreCloudMeals(): Promise<{ meals: number; items: numbe
   const { data: summariesData, error: summariesError } = await supabase
     .from('daily_summaries')
     .select('*')
-    .eq('user_id', LOCAL_USER_ID);
+    .in('user_id', ids);
   if (summariesError) throw summariesError;
 
   const summaries = (summariesData ?? []).map((row) => normalizeSummary(row as Record<string, unknown>));
@@ -247,9 +279,11 @@ export async function syncAndRestoreCloudMeals(): Promise<void> {
 
   cloudCycleInFlight = (async () => {
     useSyncStore.getState().setSyncing();
-    await syncPendingMeals();
+    await syncPendingMeals();                      // pushes profiles + unsynced meals
     useSyncStore.getState().setRestoring();
-    await restoreCloudMeals();
+    const allUserIds = await restoreAllProfiles(); // pulls all profiles from cloud
+    useProfileStore.getState().reloadProfiles();   // update store with any new profiles
+    await restoreCloudMeals(allUserIds);           // pulls meals for every known profile
     useSyncStore.getState().setCompleted();
   })();
 

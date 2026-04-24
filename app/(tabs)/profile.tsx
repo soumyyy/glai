@@ -20,6 +20,7 @@ import { getDb } from "../../lib/db/schema";
 import { createProfile, deleteProfile, updateProfile, type UserRow } from "../../lib/db/users";
 import { exportMealsCSV } from "../../lib/export";
 import { useProfileStore } from "../../lib/store/profileStore";
+import { syncAllProfiles } from "../../lib/supabase/sync";
 
 function isOpenAIConfigured() {
   try {
@@ -96,6 +97,7 @@ export default function ProfileScreen() {
     reloadProfiles();
     setActiveUser(profile.id);
     closeSheet();
+    syncAllProfiles().catch(e => console.warn('[Profile] push failed', e));
   }
 
   function handleSaveEdit() {
@@ -110,6 +112,7 @@ export default function ProfileScreen() {
     });
     reloadProfiles();
     setEditingProfile(null);
+    syncAllProfiles().catch(e => console.warn('[Profile] push failed', e));
   }
 
   function handleDeleteProfile(profile: UserRow) {

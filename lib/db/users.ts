@@ -55,6 +55,20 @@ export function updateProfile(
   );
 }
 
+export function upsertCloudProfile(profile: UserRow): void {
+  const db = getDb();
+  db.runSync(
+    `INSERT INTO users (id, name, age, weight_kg, insulin_to_carb_ratio, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name                  = excluded.name,
+       age                   = excluded.age,
+       weight_kg             = excluded.weight_kg,
+       insulin_to_carb_ratio = excluded.insulin_to_carb_ratio`,
+    [profile.id, profile.name, profile.age ?? null, profile.weight_kg ?? null, profile.insulin_to_carb_ratio ?? null, profile.created_at],
+  );
+}
+
 export function deleteProfile(id: string): void {
   const db = getDb();
   db.execSync('BEGIN IMMEDIATE TRANSACTION');
