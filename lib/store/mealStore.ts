@@ -16,6 +16,7 @@ interface MealDraft {
 
 interface MealStore {
   draft: MealDraft;
+  logDate: string | null; // null = today; set before opening camera from a past-date screen
   setImage: (base64: string) => void;
   setAdditionalImage: (base64: string) => void;
   setPortion: (size: PortionSize, multiplier: number) => void;
@@ -28,6 +29,7 @@ interface MealStore {
   updateItem: (index: number, patch: Partial<NutritionItem>) => void;
   removeItem: (index: number) => void;
   addItem: (item: NutritionItem) => void;
+  setLogDate: (date: string | null) => void;
   reset: () => void;
 }
 
@@ -43,6 +45,7 @@ const defaultDraft: MealDraft = {
 
 export const useMealStore = create<MealStore>((set) => ({
   draft: defaultDraft,
+  logDate: null,
 
   setImage: (base64) =>
     set(() => ({ draft: { ...defaultDraft, imageBase64: base64 } })),
@@ -76,5 +79,7 @@ export const useMealStore = create<MealStore>((set) => ({
   addItem: (item) =>
     set((s) => ({ draft: { ...s.draft, items: [...s.draft.items, item] } })),
 
-  reset: () => set({ draft: defaultDraft }),
+  setLogDate: (date) => set({ logDate: date }),
+
+  reset: () => set({ draft: defaultDraft, logDate: null }),
 }));

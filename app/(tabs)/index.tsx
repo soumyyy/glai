@@ -10,7 +10,10 @@ import { formatLocalDate } from '../../lib/date';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
 import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries';
 import { useSyncStore } from '../../lib/store/syncStore';
+import { useProfileStore } from '../../lib/store/profileStore';
 import { syncAndRestoreCloudMealsIfNeeded } from '../../lib/supabase/sync';
+
+function roundHalf(n: number) { return Math.round(n * 2) / 2; }
 
 function getGreeting(now: Date) {
   const hour = now.getHours();
@@ -34,6 +37,7 @@ export default function HomeScreen() {
   const [summary, setSummary] = useState<DailySummaryRow | null>(null);
   const [meals, setMeals] = useState<MealRow[]>([]);
   const lastSuccessfulSyncAt = useSyncStore((state) => state.lastSuccessfulSyncAt);
+  const activeProfile = useProfileStore((state) => state.profiles.find(p => p.id === state.activeUserId));
 
   function refreshToday() {
     const today = formatLocalDate(new Date());
@@ -63,6 +67,11 @@ export default function HomeScreen() {
   const calories = summary ? whole(summary.total_calories_kcal) : '—';
   const mealCount = summary?.meal_count ?? 0;
 
+  const icr = activeProfile?.insulin_to_carb_ratio ?? null;
+  const insulinUnits = (icr && icr >= 5 && icr <= 50 && summary)
+    ? roundHalf(summary.total_carbs_g / icr)
+    : null;
+
   return (
     <View style={styles.screen}>
       <Atmosphere />
@@ -82,9 +91,19 @@ export default function HomeScreen() {
               <Text style={styles.greeting}>{getGreeting(today)}</Text>
               <Text style={styles.date}>{formatScreenDate(today)}</Text>
             </View>
-            <View style={styles.mealBadge}>
-              <Text style={styles.mealBadgeNumber}>{mealCount}</Text>
-              <Text style={styles.mealBadgeLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
+            <View style={styles.badgeRow}>
+              <View style={styles.mealBadge}>
+                <Text style={styles.mealBadgeNumber}>{mealCount}</Text>
+                <Text style={styles.mealBadgeLabel}>meal{mealCount === 1 ? '' : 's'}</Text>
+              </View>
+              {insulinUnits !== null && (
+                <View style={[styles.mealBadge, styles.insulinBadge]}>
+                  <Text style={[styles.mealBadgeNumber, styles.insulinNumber]}>
+                    {insulinUnits % 1 === 0 ? insulinUnits : insulinUnits.toFixed(1)}
+                  </Text>
+                  <Text style={styles.mealBadgeLabel}>units</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -178,6 +197,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '400',
   },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   mealBadge: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
@@ -186,15 +210,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: 'center',
-    alignSelf: 'flex-start',
     minWidth: 52,
   },
+  insulinBadge: {},
   mealBadgeNumber: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.text,
     letterSpacing: -0.4,
   },
+  insulinNumber: {},
   mealBadgeLabel: {
     fontSize: 9,
     color: Colors.textMuted,

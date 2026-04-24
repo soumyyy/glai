@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -32,6 +32,7 @@ function deriveMealType(): MealType {
 export default function ManualEntryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { logDate } = useLocalSearchParams<{ logDate?: string }>();
 
   const [name, setName] = useState("");
   const [carbs, setCarbs] = useState("");
@@ -89,6 +90,7 @@ export default function ManualEntryScreen() {
         ],
         aiConfidence: 1.0,
         imageQuality: "acceptable",
+        loggedOnDate: logDate ?? undefined,
       });
       upsertDailySummary(saved.loggedOnDate);
       syncPendingMeals().catch((e) => {

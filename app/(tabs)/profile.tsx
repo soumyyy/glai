@@ -411,7 +411,8 @@ export default function ProfileScreen() {
                           <TouchableOpacity
                             style={s.deleteBtn}
                             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                            onPress={() => handleDeleteProfile(p)}
+                            onLongPress={() => handleDeleteProfile(p)}
+                            delayLongPress={500}
                           >
                             <Text style={s.deleteBtnText}>✕</Text>
                           </TouchableOpacity>

@@ -135,6 +135,7 @@ export default function LogScreen() {
   const [reestimatingIndex, setReestimatingIndex] = useState<number | null>(null);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
+  const logDate = useMealStore((s) => s.logDate);
 
   const imageUri = draft.imageBase64
     ? `data:image/jpeg;base64,${draft.imageBase64}`
@@ -317,6 +318,7 @@ export default function LogScreen() {
         aiConfidence: draft.overallConfidence,
         imageQuality: draft.imageQuality,
         notes: notes.trim() || undefined,
+        loggedOnDate: logDate ?? undefined,
       });
       upsertDailySummary(saved.loggedOnDate);
       syncPendingMeals().catch((e) => {

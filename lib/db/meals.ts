@@ -50,6 +50,7 @@ export interface SaveMealParams {
   aiConfidence: number;
   imageQuality: 'good' | 'acceptable' | 'poor';
   notes?: string;
+  loggedOnDate?: string; // YYYY-MM-DD, defaults to today
 }
 
 export interface SaveMealResult {
@@ -63,7 +64,7 @@ export function saveMeal(params: SaveMealParams): SaveMealResult {
   const mealId = Crypto.randomUUID();
   const createdAt = new Date();
   const createdAtIso = createdAt.toISOString();
-  const loggedOnDate = formatLocalDate(createdAt);
+  const loggedOnDate = params.loggedOnDate ?? formatLocalDate(createdAt);
 
   const totals = params.items.reduce(
     (acc, item) => ({

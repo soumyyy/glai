@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // TouchableOpacity used by backBtn
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Atmosphere } from '../../components/Atmosphere';
+import { CameraFAB } from '../../components/CameraFAB';
 import { MealListItem } from '../../components/MealListItem';
 import { Colors } from '../../constants/colors';
 import { getMealsForDate, type MealRow } from '../../lib/db/meals';
 import { getSummaryForDate, type DailySummaryRow } from '../../lib/db/summaries';
+import { useMealStore } from '../../lib/store/mealStore';
 
 function formatDateLine(date: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -22,6 +24,16 @@ export default function DayDetailScreen() {
   const insets    = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { date }  = useLocalSearchParams<{ date: string }>();
+  const setLogDate = useMealStore((s) => s.setLogDate);
+
+  function openCamera() {
+    setLogDate(date);
+    router.push('/camera');
+  }
+
+  function openManual() {
+    router.push(`/manual?logDate=${date}`);
+  }
   const [summary, setSummary] = useState<DailySummaryRow | null>(null);
   const [meals,   setMeals]   = useState<MealRow[]>([]);
 
@@ -43,8 +55,13 @@ export default function DayDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <Atmosphere />
 
+      {/* Floating camera FAB — same as tab bar */}
+      <View style={[s.fab, { bottom: insets.bottom + 20 }]} pointerEvents="box-none">
+        <CameraFAB onCamera={openCamera} onManual={openManual} />
+      </View>
+
       <ScrollView
-        contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Back */}
@@ -132,6 +149,12 @@ const s = StyleSheet.create({
   },
 
   sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 100,
+    elevation: 100,
+  },
 
   emptyCard: {
     backgroundColor: Colors.surface,
