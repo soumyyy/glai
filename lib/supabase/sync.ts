@@ -16,6 +16,7 @@ import { useSyncStore } from '../store/syncStore';
 import { getSupabaseClient } from './client';
 
 let cloudCycleInFlight: Promise<void> | null = null;
+const MIN_CLOUD_CYCLE_INTERVAL_MS = 2 * 60 * 1000;
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -295,4 +296,43 @@ export async function syncAndRestoreCloudMeals(): Promise<void> {
   } finally {
     cloudCycleInFlight = null;
   }
+}
+
+function hasPendingCloudWork(): boolean {
+  return getUnsynced().length > 0 || getPendingDeletes().length > 0;
+}
+
+export async function syncAndRestoreCloudMealsIfNeeded(options?: {
+  force?: boolean;
+  reason?: 'startup' | 'foreground' | 'home-focus' | 'manual';
+}): Promise<void> {
+  const state = useSyncStore.getState();
+  const pendingWork = hasPendingCloudWork();
+  const needsInitialRestore = !state.hasCompletedInitialRestore;
+
+  let isStale = true;
+  if (state.lastSuccessfulSyncAt) {
+    const lastSyncMs = Date.parse(state.lastSuccessfulSyncAt);
+    isStale = Number.isNaN(lastSyncMs) || (Date.now() - lastSyncMs) >= MIN_CLOUD_CYCLE_INTERVAL_MS;
+  }
+
+  if (options?.force || pendingWork || needsInitialRestore || isStale) {
+    console.log('[Sync] cycle:run', {
+      reason: options?.reason ?? 'manual',
+      force: Boolean(options?.force),
+      pendingWork,
+      needsInitialRestore,
+      isStale,
+    });
+    await syncAndRestoreCloudMeals();
+    return;
+  }
+
+  console.log('[Sync] cycle:skip', {
+    reason: options?.reason ?? 'manual',
+    pendingWork,
+    needsInitialRestore,
+    isStale,
+    lastSuccessfulSyncAt: state.lastSuccessfulSyncAt,
+  });
 }

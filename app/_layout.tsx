@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { useCameraPermissions } from 'expo-camera';
 import { AppState } from 'react-native';
-import { syncAndRestoreCloudMeals } from '../lib/supabase/sync';
+import { syncAndRestoreCloudMealsIfNeeded } from '../lib/supabase/sync';
 import { getSetting } from '../lib/db/settings';
 
 export default function RootLayout() {
@@ -18,14 +18,14 @@ export default function RootLayout() {
       return;
     }
 
-    syncAndRestoreCloudMeals().catch((error) => {
+    syncAndRestoreCloudMealsIfNeeded({ reason: 'startup' }).catch((error) => {
       console.warn('[Restore] startup sync failed', error);
     });
 
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
 
-      syncAndRestoreCloudMeals().catch((error) => {
+      syncAndRestoreCloudMealsIfNeeded({ reason: 'foreground' }).catch((error) => {
         console.warn('[Restore] foreground sync failed', error);
       });
     });

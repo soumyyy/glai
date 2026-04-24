@@ -332,8 +332,7 @@ export function clearPendingDelete(mealId: string): void {
 export function getUnsynced(): MealRow[] {
   const db = getDb();
   return db.getAllSync<MealRow>(
-    `SELECT * FROM meals WHERE user_id = ? AND synced_to_cloud = 0 ORDER BY created_at ASC`,
-    [getActiveUserId()],
+    `SELECT * FROM meals WHERE synced_to_cloud = 0 ORDER BY created_at ASC`,
   );
 }
 
