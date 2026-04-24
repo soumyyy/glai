@@ -124,12 +124,8 @@ export function initSchema(): void {
   `);
 
   database.runSync(
-    `INSERT INTO users (id, name, age, weight_kg, created_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       name = excluded.name,
-       age = excluded.age,
-       weight_kg = excluded.weight_kg`,
+    `INSERT OR IGNORE INTO users (id, name, age, weight_kg, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
     [LOCAL_USER.id, LOCAL_USER.name, LOCAL_USER.age, LOCAL_USER.weight_kg, createdAt],
   );
 
