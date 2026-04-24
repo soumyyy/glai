@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../constants/colors";
+import { reestimateItem } from "../lib/ai/reestimate";
 import type { MealType } from "../lib/db/meals";
 import { saveMeal } from "../lib/db/meals";
 import { upsertDailySummary } from "../lib/db/summaries";
@@ -37,7 +38,26 @@ export default function ManualEntryScreen() {
   const [protein, setProtein] = useState("");
   const [fat, setFat] = useState("");
   const [calories, setCalories] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
+
+  async function handleAutofill() {
+    const trimmed = name.trim();
+    if (!trimmed || autofilling) return;
+    setAutofilling(true);
+    try {
+      const result = await reestimateItem(trimmed, 150);
+      const carbsMid = Math.round((result.carbs_low_g + result.carbs_high_g) / 2);
+      setCarbs(String(carbsMid));
+      setProtein(String(Math.round(result.protein_g)));
+      setFat(String(Math.round(result.fat_g)));
+      setCalories(String(Math.round(result.calories_kcal)));
+    } catch (err) {
+      Alert.alert('Could not autofill', 'Check your connection and try again.');
+    } finally {
+      setAutofilling(false);
+    }
+  }
 
   const canSave =
     name.trim().length > 0 &&
@@ -118,15 +138,31 @@ export default function ManualEntryScreen() {
           <Text style={s.label}>
             Meal name <Text style={s.req}>*</Text>
           </Text>
-          <TextInput
-            style={s.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Rice bowl"
-            placeholderTextColor={Colors.textMuted}
-            returnKeyType="next"
-            autoFocus
-          />
+          <View style={s.nameRow}>
+            <TextInput
+              style={[s.input, s.nameInput]}
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Dal chawal"
+              placeholderTextColor={Colors.textMuted}
+              returnKeyType="next"
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[s.magicBtn, (!name.trim() || autofilling) && s.magicBtnDim]}
+              onPress={handleAutofill}
+              disabled={!name.trim() || autofilling}
+              activeOpacity={0.75}
+            >
+              {autofilling
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={s.magicBtnText}>✦</Text>
+              }
+            </TouchableOpacity>
+          </View>
+          {autofilling && (
+            <Text style={s.autofillHint}>Looking up nutrition…</Text>
+          )}
         </View>
 
         {/* Carbs */}
@@ -253,6 +289,17 @@ const s = StyleSheet.create({
     letterSpacing: 0.6,
   },
   req: { color: Colors.carbs },
+
+  nameRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  nameInput: { flex: 1 },
+  magicBtn: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center", justifyContent: "center",
+  },
+  magicBtnDim: { opacity: 0.35 },
+  magicBtnText: { fontSize: 18, color: "#fff" },
+  autofillHint: { fontSize: 12, color: Colors.primary, fontStyle: "italic", marginTop: 4 },
 
   input: {
     backgroundColor: Colors.surface,
