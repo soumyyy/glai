@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { useCameraPermissions } from 'expo-camera';
 import { AppState } from 'react-native';
@@ -8,7 +8,6 @@ import { getSetting } from '../lib/db/settings';
 
 export default function RootLayout() {
   const [, requestPermission] = useCameraPermissions();
-  const router = useRouter();
 
   useEffect(() => {
     requestPermission();
@@ -16,7 +15,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!getSetting('onboarded')) {
-      router.replace('/onboarding');
       return;
     }
 
@@ -33,10 +31,11 @@ export default function RootLayout() {
     });
 
     return () => subscription.remove();
-  }, [router]);
+  }, []);
 
   return (
     <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
