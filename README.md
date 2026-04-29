@@ -22,7 +22,7 @@ Create `.env.local` in the project root.
 
 ```bash
 EXPO_PUBLIC_OPENAI_API_KEY=
-EXPO_PUBLIC_OPENAI_MODEL=gpt-4o-2024-11-20
+EXPO_PUBLIC_OPENAI_MODEL=gpt-5.1
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_KEY=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
@@ -66,7 +66,7 @@ Before the first TestFlight build, make sure the EAS project is linked and the b
 ```bash
 npx eas project:init
 npx eas env:create --name EXPO_PUBLIC_OPENAI_API_KEY --value <openai-key> --environment production
-npx eas env:create --name EXPO_PUBLIC_OPENAI_MODEL --value gpt-4o-2024-11-20 --environment production
+npx eas env:create --name EXPO_PUBLIC_OPENAI_MODEL --value gpt-5.1 --environment production
 npx eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value <supabase-url> --environment production
 npx eas env:create --name EXPO_PUBLIC_SUPABASE_KEY --value <supabase-publishable-key> --environment production
 ```

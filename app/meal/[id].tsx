@@ -67,10 +67,11 @@ export default function MealDetailScreen() {
     setReestimatingId(item.id);
 
     try {
-      const nutrition = await reestimateItem(name, item.estimated_weight_g);
+      const nutrition = await reestimateItem(name, item.estimated_weight_g || 150);
       updateMealItem(item.id, { corrected_name: name, ...nutrition });
       if (meal) {
         recalculateMealTotals(meal.id);
+        upsertDailySummary(meal.logged_on_date);
         const updatedItems = items.map(i =>
           i.id === item.id ? { ...i, corrected_name: name, ...nutrition } : i,
         );
@@ -82,6 +83,7 @@ export default function MealDetailScreen() {
         updateMealName(meal.id, newMealName);
         setMeal({ ...getMealById(meal.id)!, meal_name: newMealName });
         setItems(updatedItems);
+        syncPendingMeals().catch(e => console.warn('[Edit] sync failed', e));
       }
     } catch (err) {
       console.warn('[reestimate] failed', err);

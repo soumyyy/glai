@@ -242,10 +242,23 @@ export function upsertCloudMealItems(items: MealItemRow[]): void {
 
 export function updateMealItemName(itemId: string, correctedName: string): void {
   const db = getDb();
-  db.runSync(
-    `UPDATE meal_items SET corrected_name = ? WHERE id = ?`,
-    [correctedName.trim() || null, itemId],
-  );
+  db.execSync('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    db.runSync(
+      `UPDATE meal_items SET corrected_name = ? WHERE id = ?`,
+      [correctedName.trim() || null, itemId],
+    );
+    db.runSync(
+      `UPDATE meals
+       SET synced_to_cloud = 0
+       WHERE id = (SELECT meal_id FROM meal_items WHERE id = ?)`,
+      [itemId],
+    );
+    db.execSync('COMMIT');
+  } catch (error) {
+    db.execSync('ROLLBACK');
+    throw error;
+  }
 }
 
 export interface MealItemNutritionPatch {
@@ -259,30 +272,46 @@ export interface MealItemNutritionPatch {
 
 export function updateMealItem(itemId: string, patch: MealItemNutritionPatch): void {
   const db = getDb();
-  db.runSync(
-    `UPDATE meal_items SET
-      corrected_name = COALESCE(?, corrected_name),
-      carbs_low_g    = COALESCE(?, carbs_low_g),
-      carbs_high_g   = COALESCE(?, carbs_high_g),
-      protein_g      = COALESCE(?, protein_g),
-      fat_g          = COALESCE(?, fat_g),
-      calories_kcal  = COALESCE(?, calories_kcal)
-     WHERE id = ?`,
-    [
-      patch.corrected_name ?? null,
-      patch.carbs_low_g    ?? null,
-      patch.carbs_high_g   ?? null,
-      patch.protein_g      ?? null,
-      patch.fat_g          ?? null,
-      patch.calories_kcal  ?? null,
-      itemId,
-    ],
-  );
+  db.execSync('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    db.runSync(
+      `UPDATE meal_items SET
+        corrected_name = COALESCE(?, corrected_name),
+        carbs_low_g    = COALESCE(?, carbs_low_g),
+        carbs_high_g   = COALESCE(?, carbs_high_g),
+        protein_g      = COALESCE(?, protein_g),
+        fat_g          = COALESCE(?, fat_g),
+        calories_kcal  = COALESCE(?, calories_kcal)
+       WHERE id = ?`,
+      [
+        patch.corrected_name ?? null,
+        patch.carbs_low_g    ?? null,
+        patch.carbs_high_g   ?? null,
+        patch.protein_g      ?? null,
+        patch.fat_g          ?? null,
+        patch.calories_kcal  ?? null,
+        itemId,
+      ],
+    );
+    db.runSync(
+      `UPDATE meals
+       SET synced_to_cloud = 0
+       WHERE id = (SELECT meal_id FROM meal_items WHERE id = ?)`,
+      [itemId],
+    );
+    db.execSync('COMMIT');
+  } catch (error) {
+    db.execSync('ROLLBACK');
+    throw error;
+  }
 }
 
 export function updateMealName(mealId: string, name: string): void {
   const db = getDb();
-  db.runSync(`UPDATE meals SET meal_name = ? WHERE id = ?`, [name.trim(), mealId]);
+  db.runSync(
+    `UPDATE meals SET meal_name = ?, synced_to_cloud = 0 WHERE id = ?`,
+    [name.trim(), mealId],
+  );
 }
 
 export function recalculateMealTotals(mealId: string): void {
@@ -293,7 +322,8 @@ export function recalculateMealTotals(mealId: string): void {
       total_carbs_high_g   = (SELECT COALESCE(SUM(carbs_high_g), 0) FROM meal_items WHERE meal_id = ?),
       total_protein_g      = (SELECT COALESCE(SUM(protein_g),    0) FROM meal_items WHERE meal_id = ?),
       total_fat_g          = (SELECT COALESCE(SUM(fat_g),        0) FROM meal_items WHERE meal_id = ?),
-      total_calories_kcal  = (SELECT COALESCE(SUM(calories_kcal),0) FROM meal_items WHERE meal_id = ?)
+      total_calories_kcal  = (SELECT COALESCE(SUM(calories_kcal),0) FROM meal_items WHERE meal_id = ?),
+      synced_to_cloud      = 0
      WHERE id = ?`,
     [mealId, mealId, mealId, mealId, mealId, mealId],
   );

@@ -77,7 +77,7 @@ Current status:
 The app accepts:
 
 - `EXPO_PUBLIC_OPENAI_API_KEY`
-- `EXPO_PUBLIC_OPENAI_MODEL` (optional, defaults to a GPT-4o snapshot)
+- `EXPO_PUBLIC_OPENAI_MODEL` (optional, defaults to `gpt-5.1`)
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`

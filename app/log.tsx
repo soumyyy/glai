@@ -277,7 +277,7 @@ export default function LogScreen() {
 
     setReestimatingIndex(index);
     try {
-      const nutrition = await reestimateItem(name, prevItem.estimated_weight_g);
+      const nutrition = await reestimateItem(name, prevItem.estimated_weight_g || 150);
       updateItem(index, { name, ...nutrition });
     } catch (err) {
       console.warn('[reestimate] failed', err);
