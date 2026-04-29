@@ -12,11 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Atmosphere } from "../../components/Atmosphere";
 import { Colors } from "../../constants/colors";
-import { getOpenAIConfig, hasSupabaseConfig } from "../../lib/config";
-import { getDb } from "../../lib/db/schema";
 import { createProfile, deleteProfile, updateProfile, type UserRow } from "../../lib/db/users";
 import { exportMealsCSV } from "../../lib/export";
 import { useAuthStore } from "../../lib/store/authStore";
@@ -24,26 +23,8 @@ import { useProfileStore } from "../../lib/store/profileStore";
 import { deleteAccount, signOut } from "../../lib/supabase/auth";
 import { syncAllProfiles } from "../../lib/supabase/sync";
 
-function isOpenAIConfigured() {
-  try {
-    getOpenAIConfig();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function clearAllData() {
-  const db = getDb();
-  db.execSync(
-    "DELETE FROM meal_items; DELETE FROM meals; DELETE FROM daily_summaries;",
-  );
-}
-
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const openAIConfigured = isOpenAIConfigured();
-  const supabaseConfigured = hasSupabaseConfig();
   const [exporting, setExporting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -161,28 +142,6 @@ export default function ProfileScreen() {
     }
   }
 
-  function handleClearAll() {
-    Alert.alert(
-      "Clear all data?",
-      "Permanently deletes every meal for this profile.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete everything",
-          style: "destructive",
-          onPress: () =>
-            Alert.alert("Are you sure?", "This cannot be undone.", [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Yes, clear everything",
-                style: "destructive",
-                onPress: clearAllData,
-              },
-            ]),
-        },
-      ],
-    );
-  }
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -242,10 +201,9 @@ export default function ProfileScreen() {
     );
   }
 
-  const connections = [
-    { label: 'Vision', status: openAIConfigured ? 'Connected' : 'Not configured', ok: openAIConfigured, neutral: false },
-    { label: 'Database', status: supabaseConfigured ? 'Connected' : 'Local only', ok: supabaseConfigured, neutral: !supabaseConfigured },
-  ];
+  const googleName = session?.user?.user_metadata?.full_name as string | undefined;
+  const googleEmail = session?.user?.email;
+  const googleAvatar = session?.user?.user_metadata?.avatar_url as string | undefined;
 
   return (
     <View style={s.screen}>
@@ -313,20 +271,29 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Connections */}
-        <Text style={s.sectionTitle}>Connections</Text>
-        <View style={s.card}>
-          {connections.map((c, i) => (
-            <View key={c.label}>
-              {i > 0 && <View style={s.cardDivider} />}
-              <View style={s.connectionRow}>
-                <View style={[s.dot, c.ok ? s.dotGreen : c.neutral ? s.dotGrey : s.dotAmber]} />
-                <Text style={s.connectionName}>{c.label}</Text>
-                <Text style={s.connectionStatus}>{c.status}</Text>
+        {/* Google account */}
+        {session && (
+          <>
+            <Text style={s.sectionTitle}>Google account</Text>
+            <View style={s.card}>
+              <View style={s.googleRow}>
+                {googleAvatar ? (
+                  <Image source={{ uri: googleAvatar }} style={s.googleAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[s.googleAvatar, s.googleAvatarFallback]}>
+                    <Text style={s.googleAvatarLetter}>
+                      {(googleName ?? googleEmail ?? '?').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={s.googleMeta}>
+                  {googleName ? <Text style={s.googleName}>{googleName}</Text> : null}
+                  {googleEmail ? <Text style={s.googleEmail}>{googleEmail}</Text> : null}
+                </View>
               </View>
             </View>
-          ))}
-        </View>
+          </>
+        )}
 
         {/* Data actions */}
         <Text style={s.sectionTitle}>Data</Text>
@@ -343,17 +310,6 @@ export default function ProfileScreen() {
             ) : (
               <Text style={s.actionChevron}>›</Text>
             )}
-          </TouchableOpacity>
-          <View style={s.cardDivider} />
-          <TouchableOpacity
-            style={s.actionRow}
-            onPress={handleClearAll}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.actionLabel, s.actionDestructive]}>
-              Clear all local data
-            </Text>
-            <Text style={[s.actionChevron, s.actionDestructive]}>›</Text>
           </TouchableOpacity>
         </View>
 
@@ -673,18 +629,26 @@ const s = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  connectionRow: {
+  googleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
     padding: 16,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotGreen: { backgroundColor: Colors.success },
-  dotAmber: { backgroundColor: Colors.warning },
-  dotGrey: { backgroundColor: Colors.textMuted },
-  connectionName: { flex: 1, fontSize: 14, fontWeight: "600", color: Colors.text },
-  connectionStatus: { fontSize: 13, color: Colors.textMuted },
+  googleAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+  },
+  googleAvatarFallback: {
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleAvatarLetter: { fontSize: 19, fontWeight: "700", color: "#fff" },
+  googleMeta: { flex: 1, gap: 2 },
+  googleName: { fontSize: 15, fontWeight: "700", color: Colors.text, letterSpacing: -0.2 },
+  googleEmail: { fontSize: 13, color: Colors.textMuted },
 
   actionRow: {
     flexDirection: "row",

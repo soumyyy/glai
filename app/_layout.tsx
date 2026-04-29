@@ -13,14 +13,20 @@ import { useAuthStore } from '../lib/store/authStore';
 import { useProfileStore } from '../lib/store/profileStore';
 import { createSessionFromUrl, getSession, runFirstSignInMigration, subscribeToAuthChanges } from '../lib/supabase/auth';
 
-void SplashScreen.preventAutoHideAsync();
+let splashRegistered = false;
+try {
+  SplashScreen.preventAutoHideAsync()
+    .then(() => { splashRegistered = true; })
+    .catch(() => {});
+} catch {}
 
 export default function RootLayout() {
   const [, requestPermission] = useCameraPermissions();
   const [fontsLoaded] = useFonts({ CevicheOne_400Regular });
   const { isReady, session, isMigrating } = useAuthStore();
+  const activeUserId = useProfileStore((s) => s.activeUserId);
   const isAuthenticated = Boolean(session);
-  const isOnboarded = isAuthenticated && Boolean(getSetting('onboarded'));
+  const isOnboarded = isAuthenticated && Boolean(getSetting('onboarded')) && Boolean(activeUserId);
 
   useEffect(() => {
     requestPermission();
@@ -78,7 +84,9 @@ export default function RootLayout() {
     const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
       void (async () => {
         try {
-          console.log('[Auth] deep-link:received', { url });
+          if (__DEV__) {
+            console.log('[Auth] deep-link:received', { url });
+          }
           const nextSession = await createSessionFromUrl(url);
           if (nextSession) {
             await prepareSession(nextSession);
@@ -101,7 +109,10 @@ export default function RootLayout() {
       return;
     }
 
-    SplashScreen.hideAsync().catch(() => undefined);
+    if (splashRegistered) {
+      splashRegistered = false;
+      SplashScreen.hideAsync().catch(() => {});
+    }
   }, [isMigrating, isReady, fontsLoaded]);
 
   useEffect(() => {

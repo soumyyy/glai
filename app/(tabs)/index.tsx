@@ -61,10 +61,10 @@ export default function HomeScreen() {
   }, [isFocused, lastSuccessfulSyncAt]);
 
   const today = new Date();
-  const carbs   = summary ? whole(summary.total_carbs_g)        : '—';
-  const protein = summary ? whole(summary.total_protein_g)      : '—';
-  const fat     = summary ? whole(summary.total_fat_g)          : '—';
-  const calories = summary ? whole(summary.total_calories_kcal) : '—';
+  const carbs   = summary ? whole(summary.total_carbs_g)        : '0';
+  const protein = summary ? whole(summary.total_protein_g)      : '0';
+  const fat     = summary ? whole(summary.total_fat_g)          : '0';
+  const calories = summary ? whole(summary.total_calories_kcal) : '0';
   const mealCount = summary?.meal_count ?? 0;
 
   const icr = activeProfile?.insulin_to_carb_ratio ?? null;
@@ -110,7 +110,7 @@ export default function HomeScreen() {
           {/* Col 2: carbs card */}
           <View style={styles.carbsCard}>
             <Text style={styles.carbsLabel}>TODAY&apos;S CARBS</Text>
-            <Text style={styles.carbsNumber}>
+            <Text style={[styles.carbsNumber, !summary && styles.carbsNumberEmpty]}>
               {carbs}<Text style={styles.carbsUnit}>g</Text>
             </Text>
           </View>
@@ -126,7 +126,7 @@ export default function HomeScreen() {
             <View key={m.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
               {i > 0 && <View style={styles.macroDiv} />}
               <View style={styles.macroItem}>
-                <Text style={[styles.macroValue, { color: m.color }]}>{m.value}</Text>
+                <Text style={[styles.macroValue, { color: summary ? m.color : Colors.textMuted }]}>{m.value}</Text>
                 <Text style={styles.macroLabel}>{m.label}</Text>
               </View>
             </View>
@@ -256,6 +256,7 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
   },
   carbsUnit: { fontSize: 26, letterSpacing: -0.5 },
+  carbsNumberEmpty: { color: Colors.textMuted },
 
   // Macro strip
   macroStrip: {

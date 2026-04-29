@@ -69,9 +69,10 @@ export default function HistoryScreen() {
   }, [isFocused]);
 
   const maxCarbs   = Math.max(...points.map((p) => p.carbs), 1);
-  const weekTotal  = Math.round(points.reduce((s, p) => s + p.carbs, 0));
-  const weekAvg    = Math.round(points.filter(p => p.meals > 0).reduce((s, p) => s + p.carbs, 0) / Math.max(points.filter(p => p.meals > 0).length, 1));
-  const daysLogged = points.filter((p) => p.meals > 0).length;
+  const activeDays = points.filter(p => p.meals > 0);
+  const weekAvg    = Math.round(activeDays.reduce((s, p) => s + p.carbs, 0) / Math.max(activeDays.length, 1));
+  const avgCalories = Math.round(activeDays.reduce((s, p) => s + p.calories, 0) / Math.max(activeDays.length, 1));
+  const daysLogged = activeDays.length;
   const loggedDays = points.filter((p) => p.meals > 0).slice().reverse();
 
   return (
@@ -89,9 +90,9 @@ export default function HistoryScreen() {
         {/* Summary strip */}
         <View style={s.macroStrip}>
           {[
-            { label: 'Total carbs', value: `${weekTotal}g` },
-            { label: 'Daily avg',   value: `${weekAvg}g` },
-            { label: 'Days logged', value: `${daysLogged}` },
+            { label: 'Avg calories', value: daysLogged > 0 ? `${avgCalories}` : '0' },
+            { label: 'Avg carbs',    value: `${weekAvg}g` },
+            { label: 'Days logged',  value: `${daysLogged}` },
           ].map((m, i) => (
             <View key={m.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
               {i > 0 && <View style={s.macroDiv} />}

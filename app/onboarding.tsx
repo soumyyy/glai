@@ -69,7 +69,9 @@ export default function OnboardingScreen() {
       } catch {
         // offline — use local profiles
       } finally {
-        setProfiles(getAllProfiles());
+        const loaded = getAllProfiles();
+        setProfiles(loaded);
+        if (loaded.length === 0) setMode('create');
         setLoading(false);
       }
     })();
@@ -104,7 +106,7 @@ export default function OnboardingScreen() {
     try {
       const age = newAge ? parseInt(newAge, 10) : null;
       const weight = newWeight ? parseFloat(newWeight) : null;
-      const icr = newICR ? parseFloat(newICR) : 16;
+      const icr = newICR ? parseFloat(newICR) : null;
       const profile = createProfile(name, age, weight, icr);
       reloadProfiles();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -125,18 +127,14 @@ export default function OnboardingScreen() {
       style={s.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Blobs */}
-      <View style={s.blobTop} />
-      <View style={s.blobBottom} />
-
       {/* Header */}
       <Animated.View
         entering={FadeInDown.delay(60).duration(500).springify()}
         style={[s.header, { paddingTop: insets.top + 32 }]}
       >
-        <Text style={s.appName}>glai</Text>
+        <Text style={s.appName}>GLAI</Text>
         <Text style={s.tagline}>
-          {mode === 'create' ? 'New profile' : 'Who\'s logging today?'}
+          {mode === 'create' ? (profiles.length === 0 ? 'Create your profile' : 'New profile') : 'Who\'s logging today?'}
         </Text>
         {mode === 'list' && profiles.length > 0 && (
           <Animated.Text entering={FadeIn.delay(200).duration(400)} style={s.taglineSub}>
@@ -217,9 +215,11 @@ export default function OnboardingScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity style={s.backRow} onPress={exitCreate} activeOpacity={0.7}>
-            <Text style={s.backText}>‹ Back</Text>
-          </TouchableOpacity>
+          {profiles.length > 0 && (
+            <TouchableOpacity style={s.backRow} onPress={exitCreate} activeOpacity={0.7}>
+              <Text style={s.backText}>‹ Back</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={s.formCard}>
             {/* Name */}
@@ -308,26 +308,7 @@ export default function OnboardingScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
-
-  blobTop: {
-    position: 'absolute',
-    top: -100,
-    right: -60,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: Colors.glowMint,
-  },
-  blobBottom: {
-    position: 'absolute',
-    bottom: -60,
-    left: -80,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: Colors.glowPeach,
-  },
+  screen: { flex: 1, backgroundColor: Colors.background },
 
   header: {
     paddingHorizontal: 28,
@@ -335,10 +316,9 @@ const s = StyleSheet.create({
     gap: 4,
   },
   appName: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'CevicheOne_400Regular',
+    fontSize: 42,
     color: Colors.primary,
-    letterSpacing: -0.3,
     marginBottom: 6,
   },
   tagline: {

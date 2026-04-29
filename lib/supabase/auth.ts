@@ -18,6 +18,19 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
+function debugAuthLog(message: string, payload?: Record<string, unknown>) {
+  if (!__DEV__) {
+    return;
+  }
+
+  if (payload) {
+    console.log(message, payload);
+    return;
+  }
+
+  console.log(message);
+}
+
 export async function getSession(): Promise<Session | null> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -55,7 +68,10 @@ export async function signInWithGoogleIdToken(input: { idToken: string; accessTo
 }
 
 export function getAuthRedirectUri(): string {
-  return makeRedirectUri({ path: 'auth/callback' });
+  return makeRedirectUri({
+    path: 'auth/callback',
+    native: 'glai://auth/callback',
+  });
 }
 
 export async function createSessionFromUrl(url: string): Promise<Session | null> {
@@ -95,7 +111,7 @@ export async function signInWithGoogleOAuth(): Promise<Session | null> {
   }
 
   const redirectTo = getAuthRedirectUri();
-  console.log('[Auth] google-oauth:start', { redirectTo });
+  debugAuthLog('[Auth] google-oauth:start', { redirectTo });
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -114,7 +130,7 @@ export async function signInWithGoogleOAuth(): Promise<Session | null> {
   }
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
-  console.log('[Auth] google-oauth:result', { type: result.type });
+  debugAuthLog('[Auth] google-oauth:result', { type: result.type });
   if (result.type !== 'success') {
     return null;
   }
