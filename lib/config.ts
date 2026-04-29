@@ -37,3 +37,11 @@ export function getSupabaseConfig() {
 export function hasSupabaseConfig(): boolean {
   return getSupabaseConfig() !== null;
 }
+
+export function getGoogleClientId(): string {
+  const clientId = readPublicEnv(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID);
+  if (!clientId) {
+    throw new Error('Google client ID not configured. Set EXPO_PUBLIC_GOOGLE_CLIENT_ID in .env.local.');
+  }
+  return clientId;
+}

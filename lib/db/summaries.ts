@@ -11,7 +11,7 @@ export interface DailySummaryRow {
   meal_count: number;
 }
 
-export function upsertDailySummary(date: string): void {
+export function upsertDailySummary(date: string, userId: string = getActiveUserId()): void {
   const db = getDb();
   db.runSync(
     `INSERT INTO daily_summaries (date, user_id, total_carbs_g, total_protein_g, total_fat_g, total_calories_kcal, meal_count)
@@ -28,15 +28,15 @@ export function upsertDailySummary(date: string): void {
        total_fat_g = excluded.total_fat_g,
        total_calories_kcal = excluded.total_calories_kcal,
        meal_count = excluded.meal_count`,
-    [date, getActiveUserId(), getActiveUserId(), date],
+    [date, userId, userId, date],
   );
 }
 
-export function getSummaryForDate(date: string): DailySummaryRow | null {
+export function getSummaryForDate(date: string, userId: string = getActiveUserId()): DailySummaryRow | null {
   const db = getDb();
   return db.getFirstSync<DailySummaryRow>(
     `SELECT * FROM daily_summaries WHERE date = ? AND user_id = ?`,
-    [date, getActiveUserId()],
+    [date, userId],
   );
 }
 

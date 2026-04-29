@@ -14,3 +14,13 @@ export function setSetting(key: string, value: string): void {
     [key, value],
   );
 }
+
+export function deleteSetting(key: string): void {
+  const db = getDb();
+  db.runSync(`DELETE FROM settings WHERE key = ?`, [key]);
+}
+
+export function deleteSettingsByPrefix(prefix: string): void {
+  const db = getDb();
+  db.runSync(`DELETE FROM settings WHERE key LIKE ?`, [`${prefix}%`]);
+}

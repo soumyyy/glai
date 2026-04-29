@@ -20,12 +20,14 @@
     "supabase:db:pull": "supabase db pull"
   },
   "dependencies": {
+    "@expo-google-fonts/ceviche-one": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.104.0",
     "expo": "~54.0.33",
+    "expo-auth-session": "~7.0.11",
     "expo-blur": "~15.0.8",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",

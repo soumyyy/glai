@@ -47,6 +47,12 @@
           }
         }
       ],
+      [
+        "expo-web-browser",
+        {
+          "experimentalLauncherActivity": false
+        }
+      ],
       "expo-sqlite",
       "expo-secure-store"
     ],

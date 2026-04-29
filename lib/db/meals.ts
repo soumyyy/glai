@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { getDb } from './schema';
 import type { NutritionItem } from '../ai/types';
 import { formatLocalDate } from '../date';
+import { getCurrentAccountId } from '../store/authStore';
 import { getActiveUserId } from '../store/profileStore';
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -11,6 +12,7 @@ export interface MealRow {
   id: string;
   user_id: string;
   created_at: string;
+  updated_at: string;
   logged_on_date: string;
   meal_type: MealType;
   meal_name: string;
@@ -81,13 +83,14 @@ export function saveMeal(params: SaveMealParams): SaveMealResult {
 
   try {
     db.runSync(
-      `INSERT INTO meals (id, user_id, created_at, logged_on_date, meal_type, meal_name, portion_size, portion_multiplier,
+      `INSERT INTO meals (id, user_id, created_at, updated_at, logged_on_date, meal_type, meal_name, portion_size, portion_multiplier,
         total_carbs_low_g, total_carbs_high_g, total_protein_g, total_fat_g, total_calories_kcal,
         ai_confidence, image_quality, notes, synced_to_cloud)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
         mealId,
         getActiveUserId(),
+        createdAtIso,
         createdAtIso,
         loggedOnDate,
         params.mealType,
@@ -145,24 +148,55 @@ export function getMealsForDate(date: string): MealRow[] {
 
 export function getMealById(mealId: string): MealRow | null {
   const db = getDb();
-  return db.getFirstSync<MealRow>(`SELECT * FROM meals WHERE id = ?`, [mealId]);
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    return null;
+  }
+  return db.getFirstSync<MealRow>(
+    `SELECT meals.*
+     FROM meals
+     INNER JOIN users ON users.id = meals.user_id
+     WHERE meals.id = ? AND users.account_id = ?`,
+    [mealId, accountId],
+  );
 }
 
 export function getMealItems(mealId: string): MealItemRow[] {
   const db = getDb();
-  return db.getAllSync<MealItemRow>(`SELECT * FROM meal_items WHERE meal_id = ?`, [mealId]);
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    return [];
+  }
+  return db.getAllSync<MealItemRow>(
+    `SELECT meal_items.*
+     FROM meal_items
+     INNER JOIN meals ON meals.id = meal_items.meal_id
+     INNER JOIN users ON users.id = meals.user_id
+     WHERE meal_items.meal_id = ? AND users.account_id = ?`,
+    [mealId, accountId],
+  );
 }
 
-export function upsertCloudMeal(meal: MealRow): void {
+export function upsertCloudMeal(meal: MealRow): boolean {
   const db = getDb();
+  const existing = db.getFirstSync<{ updated_at: string }>(
+    `SELECT updated_at FROM meals WHERE id = ?`,
+    [meal.id],
+  );
+
+  if (existing?.updated_at && existing.updated_at > meal.updated_at) {
+    return false;
+  }
+
   db.runSync(
-    `INSERT INTO meals (id, user_id, created_at, logged_on_date, meal_type, meal_name, portion_size, portion_multiplier,
+    `INSERT INTO meals (id, user_id, created_at, updated_at, logged_on_date, meal_type, meal_name, portion_size, portion_multiplier,
       total_carbs_low_g, total_carbs_high_g, total_protein_g, total_fat_g, total_calories_kcal,
       ai_confidence, image_quality, notes, synced_to_cloud)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id,
        created_at = excluded.created_at,
+       updated_at = excluded.updated_at,
        logged_on_date = excluded.logged_on_date,
        meal_type = excluded.meal_type,
        meal_name = excluded.meal_name,
@@ -181,6 +215,7 @@ export function upsertCloudMeal(meal: MealRow): void {
       meal.id,
       meal.user_id,
       meal.created_at,
+      meal.updated_at,
       meal.logged_on_date,
       meal.meal_type,
       meal.meal_name,
@@ -196,28 +231,19 @@ export function upsertCloudMeal(meal: MealRow): void {
       meal.notes,
     ],
   );
+  return true;
 }
 
-export function upsertCloudMealItems(items: MealItemRow[]): void {
+export function replaceCloudMealItems(mealId: string, items: MealItemRow[]): void {
   const db = getDb();
   db.execSync('BEGIN IMMEDIATE TRANSACTION');
   try {
+    db.runSync(`DELETE FROM meal_items WHERE meal_id = ?`, [mealId]);
     for (const item of items) {
       db.runSync(
         `INSERT INTO meal_items (id, meal_id, ai_identified_name, corrected_name, estimated_weight_g,
           carbs_low_g, carbs_high_g, protein_g, fat_g, calories_kcal, ai_notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           meal_id = excluded.meal_id,
-           ai_identified_name = excluded.ai_identified_name,
-           corrected_name = excluded.corrected_name,
-           estimated_weight_g = excluded.estimated_weight_g,
-           carbs_low_g = excluded.carbs_low_g,
-           carbs_high_g = excluded.carbs_high_g,
-           protein_g = excluded.protein_g,
-           fat_g = excluded.fat_g,
-           calories_kcal = excluded.calories_kcal,
-           ai_notes = excluded.ai_notes`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.id,
           item.meal_id,
@@ -242,6 +268,10 @@ export function upsertCloudMealItems(items: MealItemRow[]): void {
 
 export function updateMealItemName(itemId: string, correctedName: string): void {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    throw new Error('Cannot update a meal item without an authenticated account.');
+  }
   db.execSync('BEGIN IMMEDIATE TRANSACTION');
   try {
     db.runSync(
@@ -250,9 +280,16 @@ export function updateMealItemName(itemId: string, correctedName: string): void 
     );
     db.runSync(
       `UPDATE meals
-       SET synced_to_cloud = 0
-       WHERE id = (SELECT meal_id FROM meal_items WHERE id = ?)`,
-      [itemId],
+       SET synced_to_cloud = 0,
+           updated_at = ?
+       WHERE id = (
+         SELECT meals.id
+         FROM meals
+         INNER JOIN meal_items ON meal_items.meal_id = meals.id
+         INNER JOIN users ON users.id = meals.user_id
+         WHERE meal_items.id = ? AND users.account_id = ?
+       )`,
+      [new Date().toISOString(), itemId, accountId],
     );
     db.execSync('COMMIT');
   } catch (error) {
@@ -272,6 +309,10 @@ export interface MealItemNutritionPatch {
 
 export function updateMealItem(itemId: string, patch: MealItemNutritionPatch): void {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    throw new Error('Cannot update a meal item without an authenticated account.');
+  }
   db.execSync('BEGIN IMMEDIATE TRANSACTION');
   try {
     db.runSync(
@@ -295,9 +336,16 @@ export function updateMealItem(itemId: string, patch: MealItemNutritionPatch): v
     );
     db.runSync(
       `UPDATE meals
-       SET synced_to_cloud = 0
-       WHERE id = (SELECT meal_id FROM meal_items WHERE id = ?)`,
-      [itemId],
+       SET synced_to_cloud = 0,
+           updated_at = ?
+       WHERE id = (
+         SELECT meals.id
+         FROM meals
+         INNER JOIN meal_items ON meal_items.meal_id = meals.id
+         INNER JOIN users ON users.id = meals.user_id
+         WHERE meal_items.id = ? AND users.account_id = ?
+       )`,
+      [new Date().toISOString(), itemId, accountId],
     );
     db.execSync('COMMIT');
   } catch (error) {
@@ -308,14 +356,24 @@ export function updateMealItem(itemId: string, patch: MealItemNutritionPatch): v
 
 export function updateMealName(mealId: string, name: string): void {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    throw new Error('Cannot update a meal without an authenticated account.');
+  }
   db.runSync(
-    `UPDATE meals SET meal_name = ?, synced_to_cloud = 0 WHERE id = ?`,
-    [name.trim(), mealId],
+    `UPDATE meals
+     SET meal_name = ?, synced_to_cloud = 0, updated_at = ?
+     WHERE id = ? AND user_id IN (SELECT id FROM users WHERE account_id = ?)`,
+    [name.trim(), new Date().toISOString(), mealId, accountId],
   );
 }
 
 export function recalculateMealTotals(mealId: string): void {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    throw new Error('Cannot update a meal without an authenticated account.');
+  }
   db.runSync(
     `UPDATE meals SET
       total_carbs_low_g    = (SELECT COALESCE(SUM(carbs_low_g),  0) FROM meal_items WHERE meal_id = ?),
@@ -323,36 +381,57 @@ export function recalculateMealTotals(mealId: string): void {
       total_protein_g      = (SELECT COALESCE(SUM(protein_g),    0) FROM meal_items WHERE meal_id = ?),
       total_fat_g          = (SELECT COALESCE(SUM(fat_g),        0) FROM meal_items WHERE meal_id = ?),
       total_calories_kcal  = (SELECT COALESCE(SUM(calories_kcal),0) FROM meal_items WHERE meal_id = ?),
-      synced_to_cloud      = 0
-     WHERE id = ?`,
-    [mealId, mealId, mealId, mealId, mealId, mealId],
+      synced_to_cloud      = 0,
+      updated_at           = ?
+     WHERE id = ? AND user_id IN (SELECT id FROM users WHERE account_id = ?)`,
+    [mealId, mealId, mealId, mealId, mealId, new Date().toISOString(), mealId, accountId],
   );
 }
 
 export function deleteMeal(mealId: string): void {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    throw new Error('Cannot delete a meal without an authenticated account.');
+  }
   const meal = db.getFirstSync<{ synced_to_cloud: number; logged_on_date: string }>(
-    `SELECT synced_to_cloud, logged_on_date FROM meals WHERE id = ?`, [mealId],
+    `SELECT meals.synced_to_cloud, meals.logged_on_date
+     FROM meals
+     INNER JOIN users ON users.id = meals.user_id
+     WHERE meals.id = ? AND users.account_id = ?`,
+    [mealId, accountId],
   );
   if (meal?.synced_to_cloud) {
     db.runSync(
-      `INSERT OR IGNORE INTO pending_deletes (meal_id, logged_on_date, deleted_at) VALUES (?, ?, ?)`,
-      [mealId, meal.logged_on_date, new Date().toISOString()],
+      `INSERT OR IGNORE INTO pending_deletes (meal_id, logged_on_date, deleted_at, account_id) VALUES (?, ?, ?, ?)`,
+      [mealId, meal.logged_on_date, new Date().toISOString(), accountId],
     );
     console.log('[Delete] queued for cloud sync', { mealId });
   }
-  db.runSync(`DELETE FROM meals WHERE id = ?`, [mealId]);
+  db.runSync(
+    `DELETE FROM meals
+     WHERE id = ? AND user_id IN (SELECT id FROM users WHERE account_id = ?)`,
+    [mealId, accountId],
+  );
 }
 
 export interface PendingDelete {
   meal_id: string;
   logged_on_date: string;
   deleted_at: string;
+  account_id: string | null;
 }
 
 export function getPendingDeletes(): PendingDelete[] {
   const db = getDb();
-  return db.getAllSync<PendingDelete>(`SELECT * FROM pending_deletes ORDER BY deleted_at ASC`);
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    return [];
+  }
+  return db.getAllSync<PendingDelete>(
+    `SELECT * FROM pending_deletes WHERE account_id = ? ORDER BY deleted_at ASC`,
+    [accountId],
+  );
 }
 
 export function clearPendingDelete(mealId: string): void {
@@ -362,8 +441,17 @@ export function clearPendingDelete(mealId: string): void {
 
 export function getUnsynced(): MealRow[] {
   const db = getDb();
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    return [];
+  }
   return db.getAllSync<MealRow>(
-    `SELECT * FROM meals WHERE synced_to_cloud = 0 ORDER BY created_at ASC`,
+    `SELECT meals.*
+     FROM meals
+     INNER JOIN users ON users.id = meals.user_id
+     WHERE meals.synced_to_cloud = 0 AND users.account_id = ?
+     ORDER BY meals.created_at ASC`,
+    [accountId],
   );
 }
 

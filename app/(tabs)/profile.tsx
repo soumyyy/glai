@@ -19,7 +19,9 @@ import { getOpenAIConfig, hasSupabaseConfig } from "../../lib/config";
 import { getDb } from "../../lib/db/schema";
 import { createProfile, deleteProfile, updateProfile, type UserRow } from "../../lib/db/users";
 import { exportMealsCSV } from "../../lib/export";
+import { useAuthStore } from "../../lib/store/authStore";
 import { useProfileStore } from "../../lib/store/profileStore";
+import { deleteAccount, signOut } from "../../lib/supabase/auth";
 import { syncAllProfiles } from "../../lib/supabase/sync";
 
 function isOpenAIConfigured() {
@@ -43,6 +45,9 @@ export default function ProfileScreen() {
   const openAIConfigured = isOpenAIConfigured();
   const supabaseConfigured = hasSupabaseConfig();
   const [exporting, setExporting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const { session } = useAuthStore();
 
   const { activeUserId, profiles, setActiveUser, reloadProfiles } =
     useProfileStore();
@@ -179,6 +184,64 @@ export default function ProfileScreen() {
     );
   }
 
+  async function handleSignOut() {
+    if (signingOut) return;
+
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch (err) {
+      Alert.alert(
+        "Sign out failed",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  function handleDeleteAccount() {
+    if (deletingAccount) return;
+
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your account, all family profiles, meals, and cloud backup data.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Final confirmation",
+              "This cannot be undone. Your sign-in and all synced Glai data will be removed.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete account",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                    } catch (err) {
+                      Alert.alert(
+                        "Delete account failed",
+                        err instanceof Error ? err.message : "Please try again.",
+                      );
+                    } finally {
+                      setDeletingAccount(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }
+
   const connections = [
     { label: 'Vision', status: openAIConfigured ? 'Connected' : 'Not configured', ok: openAIConfigured, neutral: false },
     { label: 'Database', status: supabaseConfigured ? 'Connected' : 'Local only', ok: supabaseConfigured, neutral: !supabaseConfigured },
@@ -293,6 +356,45 @@ export default function ProfileScreen() {
             <Text style={[s.actionChevron, s.actionDestructive]}>›</Text>
           </TouchableOpacity>
         </View>
+
+        {session ? (
+          <>
+            <Text style={s.sectionTitle}>Account</Text>
+            <View style={s.card}>
+              <TouchableOpacity
+                style={s.actionRow}
+                onPress={handleSignOut}
+                disabled={signingOut || deletingAccount}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.actionLabel, s.actionDestructive]}>
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </Text>
+                {signingOut ? (
+                  <ActivityIndicator color={Colors.primary} size="small" />
+                ) : (
+                  <Text style={[s.actionChevron, s.actionDestructive]}>›</Text>
+                )}
+              </TouchableOpacity>
+              <View style={s.cardDivider} />
+              <TouchableOpacity
+                style={s.actionRow}
+                onPress={handleDeleteAccount}
+                disabled={signingOut || deletingAccount}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.actionLabel, s.actionDestructive]}>
+                  {deletingAccount ? "Deleting account…" : "Delete account"}
+                </Text>
+                {deletingAccount ? (
+                  <ActivityIndicator color={Colors.primary} size="small" />
+                ) : (
+                  <Text style={[s.actionChevron, s.actionDestructive]}>›</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
 
       {/* Profile switcher sheet */}

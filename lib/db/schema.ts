@@ -1,5 +1,4 @@
 import * as SQLite from 'expo-sqlite';
-import { LOCAL_USER } from '../../constants/user';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let schemaInitialized = false;
@@ -26,7 +25,6 @@ export function initSchema(): void {
   }
 
   const database = getDb();
-  const createdAt = new Date().toISOString();
 
   database.execSync('PRAGMA foreign_keys = ON;');
 
@@ -36,13 +34,16 @@ export function initSchema(): void {
       name TEXT NOT NULL,
       age INTEGER,
       weight_kg REAL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      account_id TEXT,
+      updated_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS meals (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      updated_at TEXT,
       logged_on_date TEXT,
       meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast','lunch','dinner','snack')),
       meal_name TEXT NOT NULL,
@@ -82,7 +83,8 @@ export function initSchema(): void {
     CREATE TABLE IF NOT EXISTS pending_deletes (
       meal_id TEXT PRIMARY KEY,
       logged_on_date TEXT NOT NULL,
-      deleted_at TEXT NOT NULL
+      deleted_at TEXT NOT NULL,
+      account_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS daily_summaries (
@@ -106,10 +108,38 @@ export function initSchema(): void {
     database.execSync(`UPDATE users SET insulin_to_carb_ratio = 16 WHERE insulin_to_carb_ratio IS NULL`);
   }
 
+  if (!hasColumn(database, 'users', 'account_id')) {
+    database.execSync(`ALTER TABLE users ADD COLUMN account_id TEXT`);
+  }
+
+  if (!hasColumn(database, 'users', 'updated_at')) {
+    database.execSync(`ALTER TABLE users ADD COLUMN updated_at TEXT`);
+  }
+
+  if (!hasColumn(database, 'meals', 'updated_at')) {
+    database.execSync(`ALTER TABLE meals ADD COLUMN updated_at TEXT`);
+  }
+
+  if (!hasColumn(database, 'pending_deletes', 'account_id')) {
+    database.execSync(`ALTER TABLE pending_deletes ADD COLUMN account_id TEXT`);
+  }
+
   database.runSync(
     `UPDATE meals
      SET logged_on_date = COALESCE(NULLIF(logged_on_date, ''), substr(created_at, 1, 10))
      WHERE logged_on_date IS NULL OR logged_on_date = ''`,
+  );
+
+  database.runSync(
+    `UPDATE users
+     SET updated_at = COALESCE(updated_at, created_at)
+     WHERE updated_at IS NULL`,
+  );
+
+  database.runSync(
+    `UPDATE meals
+     SET updated_at = COALESCE(updated_at, created_at)
+     WHERE updated_at IS NULL`,
   );
 
   database.execSync(`
@@ -122,12 +152,6 @@ export function initSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_daily_summaries_user_date
       ON daily_summaries(user_id, date);
   `);
-
-  database.runSync(
-    `INSERT OR IGNORE INTO users (id, name, age, weight_kg, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [LOCAL_USER.id, LOCAL_USER.name, LOCAL_USER.age, LOCAL_USER.weight_kg, createdAt],
-  );
 
   schemaInitialized = true;
 }

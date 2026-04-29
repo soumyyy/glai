@@ -6,11 +6,12 @@ import {
   getPendingDeletes,
   clearPendingDelete,
   upsertCloudMeal,
-  upsertCloudMealItems,
+  replaceCloudMealItems,
   type MealItemRow,
   type MealRow,
 } from '../db/meals';
 import { getAllProfiles, upsertCloudProfile, type UserRow } from '../db/users';
+import { getCurrentAccountId } from '../store/authStore';
 import { useProfileStore } from '../store/profileStore';
 import { useSyncStore } from '../store/syncStore';
 import { getSupabaseClient } from './client';
@@ -27,23 +28,86 @@ function describeError(error: unknown): string {
   return JSON.stringify(error);
 }
 
+function normalizeProfile(row: Record<string, unknown>): UserRow {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    age: row.age != null ? Number(row.age) : null,
+    weight_kg: row.weight_kg != null ? Number(row.weight_kg) : null,
+    insulin_to_carb_ratio: row.insulin_to_carb_ratio != null ? Number(row.insulin_to_carb_ratio) : null,
+    created_at: String(row.created_at),
+    account_id: typeof row.account_id === 'string' ? row.account_id : null,
+    updated_at: String(row.updated_at ?? row.created_at),
+  };
+}
+
+async function getRemoteProfile(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>, profileId: string): Promise<UserRow | null> {
+  const { data, error } = await supabase.from('users').select('*').eq('id', profileId).maybeSingle();
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    return null;
+  }
+  return normalizeProfile(data as Record<string, unknown>);
+}
+
+async function getRemoteMeal(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>, mealId: string): Promise<MealRow | null> {
+  const { data, error } = await supabase.from('meals').select('*').eq('id', mealId).maybeSingle();
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    return null;
+  }
+  return normalizeMeal(data as Record<string, unknown>);
+}
+
+async function getRemoteMealItems(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>, mealId: string): Promise<MealItemRow[]> {
+  const { data, error } = await supabase.from('meal_items').select('*').eq('meal_id', mealId);
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).map((row) => normalizeMealItem(row as Record<string, unknown>));
+}
+
 // Push all local profiles to Supabase
 export async function syncAllProfiles(): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
 
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    console.log('[Sync] profile:skip:no-account');
+    return;
+  }
+
   const profiles = getAllProfiles();
   for (const profile of profiles) {
-    const { error } = await supabase.from('users').upsert({
-      id:                    profile.id,
-      name:                  profile.name,
-      age:                   profile.age ?? null,
-      weight_kg:             profile.weight_kg ?? null,
-      insulin_to_carb_ratio: profile.insulin_to_carb_ratio ?? null,
-      created_at:            profile.created_at,
-    }, { onConflict: 'id' });
-    if (error) console.warn('[Sync] profile:push:failed', { id: profile.id, error: describeError(error) });
-    else console.log('[Sync] profile:push:done', { id: profile.id, name: profile.name });
+    try {
+      const remote = await getRemoteProfile(supabase, profile.id);
+      if (remote && remote.updated_at > profile.updated_at) {
+        upsertCloudProfile(remote);
+        console.log('[Sync] profile:pull-newer', { id: profile.id });
+        continue;
+      }
+
+      const { error } = await supabase.from('users').upsert({
+        id: profile.id,
+        name: profile.name,
+        age: profile.age ?? null,
+        weight_kg: profile.weight_kg ?? null,
+        insulin_to_carb_ratio: profile.insulin_to_carb_ratio ?? null,
+        created_at: profile.created_at,
+        account_id: profile.account_id ?? accountId,
+        updated_at: profile.updated_at,
+      }, { onConflict: 'id' });
+      if (error) throw error;
+
+      console.log('[Sync] profile:push:done', { id: profile.id, name: profile.name });
+    } catch (error) {
+      console.warn('[Sync] profile:push:failed', { id: profile.id, error: describeError(error) });
+    }
   }
 }
 
@@ -52,19 +116,17 @@ export async function restoreAllProfiles(): Promise<string[]> {
   const supabase = getSupabaseClient();
   if (!supabase) return getAllProfiles().map(p => p.id);
 
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    return [];
+  }
+
   const { data, error } = await supabase.from('users').select('*');
   if (error) throw error;
 
   const rows = (data ?? []) as Record<string, unknown>[];
   for (const row of rows) {
-    upsertCloudProfile({
-      id:                    String(row.id),
-      name:                  String(row.name),
-      age:                   row.age != null ? Number(row.age) : null,
-      weight_kg:             row.weight_kg != null ? Number(row.weight_kg) : null,
-      insulin_to_carb_ratio: row.insulin_to_carb_ratio != null ? Number(row.insulin_to_carb_ratio) : null,
-      created_at:            String(row.created_at),
-    });
+    upsertCloudProfile(normalizeProfile(row));
   }
 
   console.log('[Sync] profiles:restored', { count: rows.length });
@@ -75,6 +137,12 @@ export async function syncPendingMeals(): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) {
     console.log('[Sync] skipped:no-client');
+    return;
+  }
+
+  const accountId = getCurrentAccountId();
+  if (!accountId) {
+    console.log('[Sync] skipped:no-account');
     return;
   }
 
@@ -95,9 +163,20 @@ export async function syncPendingMeals(): Promise<void> {
   for (const meal of unsynced) {
     try {
       const items = getMealItems(meal.id);
-      const summary = getSummaryForDate(meal.logged_on_date);
+      const summary = getSummaryForDate(meal.logged_on_date, meal.user_id);
 
       console.log('[Sync] meal:start', { mealId: meal.id, itemCount: items.length, date: meal.logged_on_date });
+
+      const remoteMeal = await getRemoteMeal(supabase, meal.id);
+      if (remoteMeal && remoteMeal.updated_at > meal.updated_at) {
+        const remoteItems = await getRemoteMealItems(supabase, meal.id);
+        const applied = upsertCloudMeal(remoteMeal);
+        if (applied) {
+          replaceCloudMealItems(remoteMeal.id, remoteItems);
+        }
+        console.log('[Sync] meal:pull-newer', { mealId: meal.id });
+        continue;
+      }
 
       const { error: mealError } = await supabase
         .from('meals')
@@ -135,6 +214,13 @@ export async function syncPendingMeals(): Promise<void> {
     try {
       console.log('[Sync] delete:start', { mealId: meal_id, date: logged_on_date });
 
+      const { data: remoteMeal, error: remoteMealError } = await supabase
+        .from('meals')
+        .select('user_id')
+        .eq('id', meal_id)
+        .maybeSingle();
+      if (remoteMealError) throw remoteMealError;
+
       // meal_items first (Supabase may not have ON DELETE CASCADE)
       const { error: itemsError } = await supabase.from('meal_items').delete().eq('meal_id', meal_id);
       if (itemsError) throw itemsError;
@@ -143,18 +229,20 @@ export async function syncPendingMeals(): Promise<void> {
       if (mealError) throw mealError;
 
       // Refresh the daily summary for that date
-      const summary = getSummaryForDate(logged_on_date);
+      const remoteUserId = typeof remoteMeal?.user_id === 'string' ? remoteMeal.user_id : null;
+      const summary = remoteUserId ? getSummaryForDate(logged_on_date, remoteUserId) : null;
       if (summary) {
         const { error: summaryError } = await supabase
           .from('daily_summaries')
           .upsert(summary, { onConflict: 'date,user_id' });
         if (summaryError) throw summaryError;
-      } else {
+      } else if (remoteUserId) {
         // No meals left for that day — delete the summary row entirely
         const { error: summaryDeleteError } = await supabase
           .from('daily_summaries')
           .delete()
-          .eq('date', logged_on_date);
+          .eq('date', logged_on_date)
+          .eq('user_id', remoteUserId);
         if (summaryDeleteError) throw summaryDeleteError;
       }
 
@@ -173,6 +261,7 @@ function normalizeMeal(row: Record<string, unknown>): MealRow {
     id: String(row.id),
     user_id: String(row.user_id),
     created_at: String(row.created_at),
+    updated_at: String(row.updated_at ?? row.created_at),
     logged_on_date: String(row.logged_on_date),
     meal_type: row.meal_type as MealRow['meal_type'],
     meal_name: String(row.meal_name),
@@ -226,6 +315,10 @@ export async function restoreCloudMeals(userIds?: string[]): Promise<{ meals: nu
   }
 
   const ids = userIds ?? getAllProfiles().map(p => p.id);
+  if (ids.length === 0) {
+    console.log('[Restore] skipped:no-profiles');
+    return { meals: 0, items: 0, summaries: 0 };
+  }
   console.log('[Restore] start', { userIds: ids });
 
   const { data: mealsData, error: mealsError } = await supabase
@@ -256,10 +349,19 @@ export async function restoreCloudMeals(userIds?: string[]): Promise<{ meals: nu
 
   const summaries = (summariesData ?? []).map((row) => normalizeSummary(row as Record<string, unknown>));
 
-  for (const meal of meals) {
-    upsertCloudMeal(meal);
+  const itemsByMealId = new Map<string, MealItemRow[]>();
+  for (const item of items) {
+    const list = itemsByMealId.get(item.meal_id) ?? [];
+    list.push(item);
+    itemsByMealId.set(item.meal_id, list);
   }
-  upsertCloudMealItems(items);
+
+  for (const meal of meals) {
+    const applied = upsertCloudMeal(meal);
+    if (applied) {
+      replaceCloudMealItems(meal.id, itemsByMealId.get(meal.id) ?? []);
+    }
+  }
   for (const summary of summaries) {
     upsertCloudDailySummary(summary);
   }
@@ -280,6 +382,7 @@ export async function syncAndRestoreCloudMeals(): Promise<void> {
 
   cloudCycleInFlight = (async () => {
     useSyncStore.getState().setSyncing();
+    await syncAllProfiles();
     await syncPendingMeals();                      // pushes profiles + unsynced meals
     useSyncStore.getState().setRestoring();
     const allUserIds = await restoreAllProfiles(); // pulls all profiles from cloud
