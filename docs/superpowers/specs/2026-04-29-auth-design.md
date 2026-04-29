@@ -1,6 +1,6 @@
 # Auth Design — Glai
 **Date:** 2026-04-29  
-**Status:** Approved  
+**Status:** Approved — backend setup complete, ready for implementation  
 **Approach:** Supabase Auth + Google Sign-In + Row Level Security
 
 ---
@@ -206,15 +206,19 @@ npx expo install expo-auth-session expo-web-browser expo-secure-store
 
 ---
 
-## 12. Supabase Dashboard Setup (manual, before development)
+## 12. Supabase & Google Setup ✅ Complete
 
-1. Enable Google provider in Authentication → Providers
-2. Add Google OAuth Client ID + Secret (from Google Cloud Console)
-3. Add redirect URL: `https://<supabase-project>.supabase.co/auth/v1/callback`
-4. Add Expo redirect: `exp://` and your app scheme
-5. Enable RLS on all 5 tables
-6. Add the RLS policies from §5
-7. Add `account_id` and `updated_at` columns to cloud tables
+All manual backend steps are done. No further setup required before implementation.
+
+| Step | Status |
+|------|--------|
+| Google Cloud Console — OAuth consent screen + Web client ID/secret | ✅ Done |
+| Supabase — Google provider enabled (skip nonce checks on, email required) | ✅ Done |
+| Supabase — Redirect URLs added (`glai://auth/callback`, `exp://localhost:8081/--/auth/callback`) | ✅ Done |
+| Supabase — `account_id`, `updated_at` columns added to `users`, `meals`, `pending_deletes` | ✅ Done (via migration `20260429124130_add_auth_columns.sql`) |
+| Supabase — RLS enabled + policies applied on all 5 tables | ✅ Done (same migration) |
+
+**Google OAuth Client ID** is stored in Supabase provider settings. Codex will need it in `.env.local` as `EXPO_PUBLIC_GOOGLE_CLIENT_ID` for the `expo-auth-session` flow.
 
 ---
 
